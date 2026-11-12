@@ -35,6 +35,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Protocol, Tup
 
 from .anthropic_streaming_client import StreamedAssistantMessage, ToolUseCall, run_claude_turn
 from .audio import play_pcm
+from .tone import DialToneDetector, dial_tone_pcm
 from .soniox_streaming_client import (
     SonioxSTTClient,
     SonioxTTSClient,
@@ -71,6 +72,7 @@ class CallSocket(Protocol):
 
 
 HANG_UP_AFTER_SPEECH_SECONDS = 1.0             # the line stays open this long after the last word, as a person would put the phone down
+HANG_UP_TONE_SECONDS = 10.0                    # after it hangs up, the caller hears a dial tone until they hang up too, for at most this long
 HANG_UP_PATIENCE_SECONDS = 30.0                # but never waits longer than this for the goodbye to play
 
 END_CALL_TOOL: Dict[str, Any] = {
@@ -153,6 +155,7 @@ class VoiceBridge:
         self._held_this_turn = False
         self._holds = 0
         self._call: Optional[CallSocket] = None
+        self._dial_tone = DialToneDetector()
         self._ending = False                     # the model has decided the call is over: it hangs up once the goodbye has been heard
         # How long each reply took to begin: from the end-of-speech signal (Soniox raises it about 0.3 s after the caller stops) to the first audio sent.
         self._turn_end_at: Optional[float] = None
@@ -287,6 +290,11 @@ class VoiceBridge:
                     self._terminated_by = self._terminated_by or "caller"
                     return
                 await self._stt.send_audio(data)
+                if self._dial_tone.feed(data):
+                    logger.info("dial tone heard: the caller has hung up (call=%s)", self._cfg.call_uuid)
+                    self._terminated_by = self._terminated_by or "caller"
+                    await self._hang_up(call)
+                    return
                 frame_count += 1
                 byte_count += len(data)
                 if frame_count == 1:
@@ -644,6 +652,11 @@ class VoiceBridge:
             await asyncio.sleep(0.2)
         logger.info("bridge hang-up: the representative ended the call (call=%s)", self._cfg.call_uuid)
         self._terminated_by = self._terminated_by or "hangup"
+        if HANG_UP_TONE_SECONDS > 0:
+            try:
+                await play_pcm(call, dial_tone_pcm(HANG_UP_TONE_SECONDS))       # ends early: when the caller hangs up, the call is over and this task is cancelled
+            except Exception as exc:                                                # noqa: BLE001 -- best-effort
+                logger.debug("dial tone failed (ignored): %s", exc)
         await self._hang_up(call)
 
     async def _hang_up(self, call: CallSocket) -> None:

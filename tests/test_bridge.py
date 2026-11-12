@@ -421,6 +421,7 @@ async def test_how_long_each_reply_took_to_begin_is_measured(env, monkeypatch):
 
 async def test_the_representative_ends_the_call_after_the_goodbye_has_been_heard(env, monkeypatch):
     monkeypatch.setattr(bridge_module, "HANG_UP_AFTER_SPEECH_SECONDS", 0.05)
+    monkeypatch.setattr(bridge_module, "HANG_UP_TONE_SECONDS", 0.3)
 
     async def script(messages, on_text, cancel):
         if len(env["turns"]) == 1:
@@ -438,7 +439,8 @@ async def test_the_representative_ends_the_call_after_the_goodbye_has_been_heard
     await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="stream-1"))
     await asyncio.wait_for(env["call"].closed.wait(), timeout=3)
     await task
-    assert bridge.terminated_by == "hangup" and env["call"].played                     # the goodbye was played before the line closed
+    assert bridge.terminated_by == "hangup" and env["call"].played
+    assert any(len(frame) == 320 for frame in env["call"].played)                       # and then the caller heard the dial tone until the line closed                     # the goodbye was played before the line closed
 
 
 async def test_the_call_is_not_ended_while_the_caller_is_still_asking(env, monkeypatch):
@@ -463,5 +465,18 @@ async def test_with_no_time_limit_the_call_goes_on_until_someone_hangs_up(env, m
     await asyncio.sleep(0.3)
     assert not env["call"].closed.is_set() and not task.done()
     env["call"].incoming.put_nowait(END)
+    await asyncio.wait_for(task, timeout=3)
+    assert bridge.terminated_by == "caller"
+
+
+async def test_hearing_a_dial_tone_the_line_hangs_up(env, monkeypatch):
+    from fake_payer.tone import dial_tone_pcm
+    bridge = VoiceBridge(settings(), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    tone = dial_tone_pcm(1.0)
+    for start in range(0, len(tone), 320):
+        env["call"].incoming.put_nowait(tone[start:start + 320])
+    await asyncio.wait_for(env["call"].closed.wait(), timeout=3)
     await asyncio.wait_for(task, timeout=3)
     assert bridge.terminated_by == "caller"
