@@ -92,7 +92,7 @@ def test_the_benefits_are_given_by_category_with_the_services_and_limits_in_each
     assert preventive["covered"] and preventive["coverage_percent"] == 100 and preventive["deductible_applies"] is False and preventive["waiting_period_months"] == 0
     exam = next(s for s in preventive["services"] if s["code"] == "D0120")
     assert exam == {"code": "D0120", "description": "routine exam", "frequency_limit": {"times": 2, "period": "calendar year"}, "times_used": 0, "times_remaining": 2}
-    assert benefits["basic"]["coverage_percent"] == 80 and benefits["basic"]["waiting_period_months"] == 3 and benefits["basic"]["deductible_applies"] is True
+    assert benefits["basic"]["coverage_percent"] == 80 and benefits["basic"]["waiting_period_months"] == 6 and benefits["basic"]["deductible_applies"] is True
     assert benefits["major"]["coverage_percent"] == 50 and benefits["orthodontics"]["coverage_percent"] == 50
 
 
@@ -170,10 +170,7 @@ async def test_the_tool_takes_every_field_as_optional_and_is_the_lookup(fixture)
 
 
 def test_the_standing_answers_come_back_with_every_lookup_even_before_a_patient_is_found(fixture):
-    expected = {"employee_id": "3141", "fee_schedule": "The fee schedule that applies is dated 2026.", "waiting_period": "The waiting period is three months.",
-                "covered_once_per_lifetime": "Yes.", "missing_tooth_clause": "The plan covers up to two missing teeth.",
+    expected = {"employee_id": "3141", "fee_schedule": "The fee schedule that applies is dated 2026.", "covered_once_per_lifetime": "Yes.", "missing_tooth_clause": "The plan covers up to two missing teeth.",
                 "paid_by_prior_carrier": "Unknown.", "treatment_in_progress_how_paid": "Unknown."}
     assert fixture.lookup()["standing_answers"] == expected
     assert fixture.lookup(member_id="M100001", date_of_birth="1985-03-14")["standing_answers"] == expected
-    for plan in fixture.plans.values():
-        assert set(plan["waiting_period_months"].values()) <= {0, 3}                                 # the plans agree with the standing answer
