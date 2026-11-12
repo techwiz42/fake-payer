@@ -275,3 +275,57 @@ async def test_at_the_length_limit_the_time_is_up_message_is_played_before_the_h
     bridge = VoiceBridge(settings(max_call_seconds=0.2, time_up_audio=b"t" * 640), {}, "persona")
     await asyncio.wait_for(bridge.run(env["call"]), timeout=3)
     assert env["call"].played == [b"t" * 320, b"t" * 320] and env["call"].closed.is_set() and bridge.terminated_by == "watchdog"
+
+
+async def test_audio_is_sent_at_the_pace_it_is_heard_not_all_at_once(env, monkeypatch):
+    """Soniox synthesizes a reply far faster than real time. Sent all at once it would sit in the telephony provider's buffer, and a barge-in could not reach it."""
+    async def script(messages, on_text, cancel):
+        await on_text("A long answer.")
+        return text_message("A long answer.")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="greeting-1"))
+    await asyncio.sleep(0.05)
+    await say(env, "go on")
+    await until(lambda: env["tts"].chunks)
+    half_second = 8000                                              # PCM16 at 8 kHz is 16000 bytes a second
+    await env["tts"].queue.put(TTSAudioChunk(synthesis_id="stream-1", pcm16_bytes=b"\x01" * half_second))
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="stream-1"))
+    await asyncio.sleep(0.1)
+    sent_early = sum(len(f) for f in env["call"].played)
+    assert 0 < sent_early < half_second * 0.75                       # a head start of a fraction of a second, not the whole reply
+    await until(lambda: sum(len(f) for f in env["call"].played) == half_second, seconds=2.0)
+    assert all(len(f) <= 320 for f in env["call"].played)           # in 20 ms frames
+    env["call"].incoming.put_nowait(END)
+    await task
+
+
+async def test_a_caller_breaking_in_while_the_reply_is_still_playing_cuts_it_off_even_though_it_finished_generating(env, monkeypatch):
+    """The real bug: the whole reply was synthesized in a moment, so the bridge thought the agent had finished speaking while the caller was still hearing it, and a barge-in
+    never fired."""
+    async def script(messages, on_text, cancel):
+        await on_text("A very long answer indeed.")
+        return text_message("A very long answer indeed.")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="greeting-1"))
+    await asyncio.sleep(0.05)
+    await say(env, "tell me everything")
+    await until(lambda: env["tts"].chunks)
+    two_seconds = 32000
+    await env["tts"].queue.put(TTSAudioChunk(synthesis_id="stream-1", pcm16_bytes=b"\x01" * two_seconds))
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="stream-1"))      # generation is finished; two seconds of speech are still to be heard
+    await asyncio.sleep(0.4)
+    assert env["tts"].cancelled == 0
+    await env["stt"].queue.put(STTSpeechStarted())                                 # the caller talks over it
+    await until(lambda: env["tts"].cancelled == 1)
+    sent_at_cutoff = sum(len(f) for f in env["call"].played)
+    await asyncio.sleep(0.5)
+    assert sum(len(f) for f in env["call"].played) == sent_at_cutoff               # nothing more is sent after the cut-off
+    assert sent_at_cutoff < two_seconds * 0.5                                      # and most of the reply was never sent at all
+    env["call"].incoming.put_nowait(END)
+    await task

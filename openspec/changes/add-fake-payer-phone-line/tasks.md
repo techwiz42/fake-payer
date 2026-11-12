@@ -36,7 +36,7 @@
 
 ## 6. Hosting and number
 
-- [ ] 6.1 Decide where it runs (open question 1), write a container build and a deploy script. Verify: a deploy from a clean checkout answers the provider's request over HTTPS.
+- [x] 6.1 Decide where it runs (open question 1), write a container build and a deploy script. Verify: a deploy from a clean checkout answers the provider's request over HTTPS. (Its own e2-micro VM. Checked from outside: valid certificate, the answer request returns the connect response, and a real connection played the disclosure, first audio in 0.77 s.)
 - [ ] 6.2 Obtain the number, set the limits, point the provider at the program. Verify: a real call from a phone is answered with the disclosure.
 - [ ] 6.3 Settle the model (open question 2) from the latency of a recorded call. Verify: the measured time from the caller finishing to the first spoken word is written in the repository.
 

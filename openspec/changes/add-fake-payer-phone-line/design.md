@@ -49,6 +49,8 @@ Not copied: anything about tenants, patients, redaction, scheduling or the platf
 
 **8. Secrets and numbers live outside the repository.** Provider, Soniox and model credentials, and the number itself, come from the environment. The repository ships an example configuration with obviously fictional values. Fixture telephone numbers use the reserved fictional range.
 
+**9. Hosting: its own small virtual machine.** An `e2-micro` in the same Google Cloud project, defined in Terraform (envs/fake-payer in the infrastructure repository, with its own state), running the container behind Caddy, which gets its certificate automatically and passes through only the answer path and the audio path. A public, open-to-anyone service and its speech and model keys therefore share no machine with anything else. The settings live in one Secret Manager secret the VM reads into memory before each start; the call log and stored refusals sit on the VM's own disk. Alternatives considered: a container on the existing builder machine (cheapest, rejected so the public line and its keys do not share a machine with customer demonstrations) and Cloud Run (no persistent disk for the log, and the in-memory limits would reset on restart).
+
 ## Risks / Trade-offs
 
 - **Open to everyone.** Anyone who finds the number can run up cost. Mitigation: simultaneous-call cap, per-number rate limit, length limit and a daily ceiling, with a spoken refusal that costs nothing.
@@ -64,5 +66,5 @@ A second change adds the harder behaviors once the first cut is working: a spoke
 
 ## Open Questions
 
-1. **Where it runs.** A container on an existing virtual machine, or a small managed container service. The second keeps it off machines that run other things. Task 6.1 settles this.
+1. ~~**Where it runs.**~~ Settled: its own small virtual machine (decision 9).
 2. **Which model.** The default Claude model in the copied client, or a smaller, faster one. A short model is enough for a lookup-and-answer persona; to be settled by the first recorded call's latency.

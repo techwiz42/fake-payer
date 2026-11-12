@@ -1,5 +1,7 @@
 # Copied from agent_framework b227c23b: modules/communication/backend/soniox_stitched_bridge.py
-# Changes: at the call-length limit the watchdog first plays a stored "time is up" message; tool results are kept whole in the transcript (the original cut them to 500 characters);
+# Changes: audio goes to the caller at the pace it is heard (never more than a fraction of a second ahead), and the agent counts as speaking until it has played, so a
+# caller breaking in cuts a reply off (the original sent each reply as fast as it was synthesized, which sits in the telephony provider's buffer where a barge-in cannot reach);
+# at the call-length limit the watchdog first plays a stored "time is up" message; tool results are kept whole in the transcript (the original cut them to 500 characters);
 # the privacy-redaction step and the placeholder helpers, the tenant and practice configuration, call persistence, the payer-call control, the language hints
 # and the platform's tool dispatcher are removed. The call's audio goes through a small CallSocket (below) where the original took the web framework's websocket, so the
 # server that carries it can be any. Tools are a name -> (definition, async function) mapping run in this file. The turn state machine, barge-in, streaming reply into
@@ -46,6 +48,10 @@ from .soniox_streaming_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+BYTES_PER_SECOND = 16000        # PCM16 at 8 kHz
+FRAME_BYTES = 320               # 20 ms
+PLAYOUT_LEAD_SECONDS = 0.2      # how far ahead of what the caller is hearing audio may be sent: the most a barge-in cannot take back
 
 ToolFunction = Callable[[Dict[str, Any]], Awaitable[Any]]
 
@@ -124,6 +130,9 @@ class VoiceBridge:
         # Barge-in + cancellation state.
         self._claude_cancel: Optional[asyncio.Event] = None
         self._active_tts_synthesis_id: Optional[str] = None
+        # Audio from text-to-speech waits here and is played out at the pace it is heard; `_play_until` is when what has been sent will have finished playing.
+        self._playout: asyncio.Queue = asyncio.Queue()
+        self._play_until = 0.0
 
         # Terminal outcome (stamped at close time).
         self._failure_reason: Optional[str] = None
@@ -175,14 +184,15 @@ class VoiceBridge:
             # Four concurrent tasks:
             #   1) caller audio -> STT
             #   2) STT events -> turn state machine
-            #   3) TTS events -> caller audio (and state)
+            #   3) TTS events -> a queue; 3b) the queue -> caller audio, at the pace it is heard (and state)
             #   4) Watchdog: enforce the maximum call length
             audio_in = asyncio.create_task(self._audio_to_stt(call))
             stt_loop = asyncio.create_task(self._stt_event_loop(call))
             tts_loop = asyncio.create_task(self._tts_event_loop(call))
+            playout = asyncio.create_task(self._playout_loop(call))
             watchdog = asyncio.create_task(self._watchdog(call))
 
-            done, pending = await asyncio.wait([audio_in, stt_loop, tts_loop, watchdog], return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait([audio_in, stt_loop, tts_loop, playout, watchdog], return_when=asyncio.FIRST_COMPLETED)
             for t in pending:
                 t.cancel()
             for t in pending:
@@ -307,20 +317,53 @@ class VoiceBridge:
                 # Drop frames from a superseded (canceled) synthesis: simple, deterministic barge-in semantics.
                 if event.synthesis_id != self._active_tts_synthesis_id:
                     continue
-                try:
-                    await call.send_audio(event.pcm16_bytes)
-                except Exception as e:
-                    logger.info("send to the caller failed (call=%s err=%r)", self._cfg.call_uuid, e)
-                    self._terminated_by = self._terminated_by or "caller"
-                    return
+                self._playout.put_nowait((event.synthesis_id, event.pcm16_bytes))
             elif isinstance(event, TTSSynthesisComplete):
-                if event.synthesis_id == self._active_tts_synthesis_id:
-                    self._state = BridgeState.LISTENING
+                # Everything of this reply has been generated; it has not necessarily been heard. The playout loop ends the "speaking" state when it has been.
+                self._playout.put_nowait((event.synthesis_id, None))
             elif isinstance(event, TTSError):
                 logger.warning("TTS error: %s (fatal=%s)", event.message, event.fatal)
                 if event.fatal:
                     self._terminated_by = self._terminated_by or "error"
                     return
+
+    async def _playout_loop(self, call: CallSocket) -> None:
+        """Send queued speech to the caller at the pace it is heard, staying at most PLAYOUT_LEAD_SECONDS ahead of what they are hearing.
+
+        Soniox synthesizes much faster than real time. Sending each chunk as it arrived put whole replies into the telephony provider's buffer within a second or two:
+        the bridge then believed the agent had finished speaking while the caller still heard it, so a caller talking over it was not noticed, and what was already
+        buffered could not be recalled. Pacing keeps the bridge's idea of "speaking" true to what the caller hears, and a barge-in drops everything not yet sent.
+        """
+        while True:
+            synthesis_id, data = await self._playout.get()
+            if synthesis_id != self._active_tts_synthesis_id:
+                continue                                              # cancelled by a barge-in, or superseded
+            if data is None:
+                delay = max(0.0, self._play_until - time.monotonic())
+                task = asyncio.create_task(self._listening_after(synthesis_id, delay))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
+                continue
+            for start in range(0, len(data), FRAME_BYTES):
+                ahead = self._play_until - time.monotonic()
+                if ahead > PLAYOUT_LEAD_SECONDS:
+                    await asyncio.sleep(ahead - PLAYOUT_LEAD_SECONDS)
+                if synthesis_id != self._active_tts_synthesis_id:
+                    break                                             # cut off while waiting
+                frame = data[start:start + FRAME_BYTES]
+                try:
+                    await call.send_audio(frame)
+                except Exception as e:
+                    logger.info("send to the caller failed (call=%s err=%r)", self._cfg.call_uuid, e)
+                    self._terminated_by = self._terminated_by or "caller"
+                    return
+                self._play_until = max(self._play_until, time.monotonic()) + len(frame) / BYTES_PER_SECOND
+
+    async def _listening_after(self, synthesis_id: str, delay: float) -> None:
+        """When a reply has finished playing, go back to listening (unless it was cut off or a newer one has begun)."""
+        await asyncio.sleep(delay)
+        if synthesis_id == self._active_tts_synthesis_id and self._state == BridgeState.AGENT_SPEAKING:
+            self._state = BridgeState.LISTENING
 
     # ---- barge-in fanout --------------------------------------------------
 
@@ -331,6 +374,9 @@ class VoiceBridge:
             self._claude_cancel.set()
         # Invalidate the current synthesis so any already-buffered chunks are dropped.
         self._active_tts_synthesis_id = None
+        while not self._playout.empty():                              # audio generated but not yet sent is dropped
+            self._playout.get_nowait()
+        self._play_until = time.monotonic()
         if self._tts is not None:
             try:
                 await self._tts.cancel()
@@ -395,8 +441,10 @@ class VoiceBridge:
 
             tool_uses = assistant.tool_uses
             if not tool_uses:
-                # End of turn; hand control back to listening.
-                self._state = BridgeState.LISTENING
+                # End of turn. A reply that has words is still being spoken (the model finishes long before the caller has heard it): the playout loop returns to
+                # listening when it has played. Only a turn with nothing to say hands control back now.
+                if not assistant.text.strip():
+                    self._state = BridgeState.LISTENING
                 return
 
             # Run each tool_use and build the follow-up user message.
