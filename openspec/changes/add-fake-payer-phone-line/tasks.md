@@ -2,9 +2,9 @@
 
 ## 1. Repository and configuration
 
-- [ ] 1.1 Project skeleton: package, tests, example configuration with fictional values, a README saying this is a test fixture and not a product. Verify: tests run from a clean checkout.
-- [ ] 1.2 Configuration read from the environment (provider, Soniox and model credentials, the number, limits). Verify: a test shows the program refuses to start with a missing credential and never logs one.
-- [ ] 1.3 A check that fails the build if the repository contains a real insurer's name (from a list kept in the check), a telephone number outside the fictional ranges, an internal host name, or anything shaped like a credential. Verify: a seeded violation of each kind fails it.
+- [x] 1.1 Project skeleton: package, tests, example configuration with fictional values, a README saying this is a test fixture and not a product. Verify: tests run from a clean checkout.
+- [x] 1.2 Configuration read from the environment (provider, Soniox and model credentials, the number, limits). Verify: a test shows the program refuses to start with a missing credential and never logs one.
+- [x] 1.3 A check that fails the build if the repository contains a real insurer's name (from a list kept in the check), a telephone number outside the fictional ranges, an internal host name, or anything shaped like a credential. Verify: a seeded violation of each kind fails it.
 
 ## 2. Bring in the voice code
 

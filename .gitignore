@@ -7,3 +7,4 @@ __pycache__/
 calls/
 *.log
 .DS_Store
+*.egg-info/
