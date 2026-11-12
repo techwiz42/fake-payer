@@ -135,3 +135,26 @@ async def test_a_whole_call_a_coverage_question_a_tool_and_a_spoken_answer(legs,
             assert await asyncio.wait_for(call.recv(), 2) == b"answer-audio"
     finally:
         await context.__aexit__(None, None, None)
+
+
+async def test_by_default_a_call_runs_with_the_lookup_tool_and_the_persona_carrying_its_own_reference(legs, monkeypatch):
+    from fake_payer.persona import call_reference
+    seen = {}
+
+    async def fake_model(messages, tools, system_prompt, on_text, on_tool_use, cancel_event, **_):
+        seen.update(tools=[t["name"] for t in tools], prompt=system_prompt)
+        return StreamedAssistantMessage(content=[{"type": "text", "text": "ok"}], stop_reason="end_turn")
+    monkeypatch.setattr(bridge_module, "run_claude_turn", fake_model)
+
+    context, port = await running(FakePayerServer(CONFIG))
+    try:
+        async with connect(f"ws://127.0.0.1:{port}/ws/call-77") as call:
+            await until(lambda: "tts" in legs and legs["tts"].synthesized)
+            await legs["tts"].queue.put(TTSSynthesisComplete(synthesis_id="greeting-1"))
+            await asyncio.sleep(0.05)
+            for event in (STTSpeechStarted(), STTFinalTranscript(text="hello"), STTSpeechEnded()):
+                await legs["stt"].queue.put(event)
+            await until(lambda: seen)
+    finally:
+        await context.__aexit__(None, None, None)
+    assert seen["tools"] == ["lookup_coverage"] and call_reference("call-77") in seen["prompt"]

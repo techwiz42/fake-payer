@@ -22,7 +22,8 @@ from websockets.http11 import Request, Response
 
 from .bridge import BridgeSettings, ToolFunction, VoiceBridge
 from .config import Config
-from .persona import DISCLOSURE
+from .coverage import Fixture, make_tools
+from .persona import DISCLOSURE, build_system_prompt
 from .soniox_ncco import BRIDGE_PATH, build_ncco, inbound_ws_url
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,10 @@ class WebsocketCall:
 
 
 class FakePayerServer:
-    def __init__(self, config: Config, tools: Optional[Tools] = None, system_prompt: str = ""):
+    def __init__(self, config: Config, tools: Optional[Tools] = None, system_prompt: Optional[str] = None):
+        """By default the line answers from the fixture with the persona's prompt (which carries the call's own reference number). `tools` and `system_prompt` replace them in tests."""
         self._config = config
-        self._tools: Tools = tools or {}
+        self._tools: Tools = tools if tools is not None else make_tools(Fixture.load())
         self._system_prompt = system_prompt
 
     # ---- HTTP: the answer request, and a refusal for everything else ------
@@ -96,7 +98,7 @@ class FakePayerServer:
             tts_voice=self._config.tts_voice,
             max_call_seconds=self._config.max_call_seconds,
         )
-        bridge = VoiceBridge(settings, self._tools, self._system_prompt)
+        bridge = VoiceBridge(settings, self._tools, self._system_prompt if self._system_prompt is not None else build_system_prompt(call_uuid))
         try:
             await bridge.run(WebsocketCall(connection))
         except Exception:

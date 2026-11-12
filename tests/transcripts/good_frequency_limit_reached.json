@@ -1,0 +1,54 @@
+{
+ "note": "scripted transcript in the call log's turn shape",
+ "turns": [
+  {
+   "role": "assistant",
+   "text": "Thank you. I am Dana. Let me look that up."
+  },
+  {
+   "role": "tool_result",
+   "content": {
+    "verified": true,
+    "member": {
+     "first_name": "Robin",
+     "last_name": "Example"
+    },
+    "eligibility": {
+     "status": "active",
+     "effective_date": "2024-01-01"
+    },
+    "plan": {
+     "name": "Acme Gold Dental",
+     "annual_maximum": 1500,
+     "annual_maximum_remaining": 1320,
+     "deductible": 50,
+     "deductible_remaining": 0
+    },
+    "procedure": {
+     "code": "D1110",
+     "found": true,
+     "description": "adult cleaning",
+     "category": "preventive",
+     "coverage_percent": 100,
+     "deductible_applies": false,
+     "frequency_limit": {
+      "times": 2,
+      "period": "calendar year",
+      "times_used": 2,
+      "times_remaining": 0
+     },
+     "covered_now": false,
+     "reason": "the frequency limit has been reached"
+    }
+   }
+  },
+  {
+   "role": "assistant",
+   "text": "Your plan covers an adult cleaning at one hundred percent, but the limit of two times per calendar year has been reached, so it is not covered now."
+  },
+  {
+   "role": "assistant",
+   "text": "You have thirteen hundred twenty dollars left of your annual maximum."
+  }
+ ]
+}

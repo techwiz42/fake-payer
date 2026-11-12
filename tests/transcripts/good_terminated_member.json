@@ -1,0 +1,25 @@
+{
+ "note": "scripted transcript in the call log's turn shape",
+ "turns": [
+  {
+   "role": "tool_result",
+   "content": {
+    "verified": true,
+    "member": {
+     "first_name": "Casey",
+     "last_name": "Placeholder"
+    },
+    "eligibility": {
+     "status": "terminated",
+     "effective_date": "2023-01-01",
+     "termination_date": "2026-06-30"
+    },
+    "coverage_available": false
+   }
+  },
+  {
+   "role": "assistant",
+   "text": "I can see that coverage ended on June thirtieth, twenty twenty six. I have no coverage figures to give you."
+  }
+ ]
+}

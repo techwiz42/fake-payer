@@ -22,9 +22,9 @@
 
 ## 4. Coverage answers
 
-- [ ] 4.1 Fixture file format and a first set of members, plans and procedure codes, each member with a note, including a terminated member and a used-up frequency limit. Verify: a schema check and the "no real data" check pass.
-- [ ] 4.2 `lookup_coverage` and the identity check (member identifier, date of birth). Verify: match, mismatch and not-found tests.
-- [ ] 4.3 Persona prompt that forbids stating values not returned by the tool, plus the representative name and a stable call reference. Verify: a replay test fails when a number in the speech is not in the tool results; the same reference is repeated on request.
+- [x] 4.1 Fixture file format and a first set of members, plans and procedure codes, each member with a note, including a terminated member and a used-up frequency limit. Verify: a schema check and the "no real data" check pass.
+- [x] 4.2 `lookup_coverage` and the identity check (member identifier, date of birth). Verify: match, mismatch and not-found tests.
+- [x] 4.3 Persona prompt that forbids stating values not returned by the tool, plus the representative name and a stable call reference. Verify: a replay test fails when a number in the speech is not in the tool results; the same reference is repeated on request.
 
 ## 5. Limits and log
 

@@ -37,3 +37,23 @@ def test_the_bridge_begins_every_call_with_the_disclosure(monkeypatch):
 
     bridge = asyncio.run(run())
     assert made["tts"].synthesized == [DISCLOSURE] and bridge.transcript[0].text == DISCLOSURE
+
+
+def test_the_call_reference_is_eight_digits_stable_within_a_call_and_different_between_calls():
+    from fake_payer.persona import call_reference
+    first = call_reference("call-uuid-1")
+    assert first.isdigit() and len(first) == 8
+    assert call_reference("call-uuid-1") == first and call_reference("call-uuid-2") != first
+
+
+def test_the_prompt_names_the_representative_gives_the_reference_and_forbids_ungrounded_facts():
+    from fake_payer.persona import PROVIDER_NAME, REPRESENTATIVE_NAME, build_system_prompt, call_reference
+    prompt = build_system_prompt("call-uuid-1")
+    assert REPRESENTATIVE_NAME in prompt and PROVIDER_NAME in prompt and call_reference("call-uuid-1") in prompt
+    assert "must come from a lookup_coverage result" in prompt and "Never recall, estimate, round, calculate or guess" in prompt
+    assert "fictional" in prompt and call_reference("call-uuid-2") not in prompt
+
+
+def test_the_prompt_names_no_real_insurer():
+    from fake_payer.persona import build_system_prompt
+    assert scan_text(build_system_prompt("x")) == []

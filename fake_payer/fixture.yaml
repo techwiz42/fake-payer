@@ -1,0 +1,84 @@
+# The fictional members, plans and coverage the line answers from. Everything here is made up.
+#
+# Descriptions of procedures are plain-language, written for this file; they are not the ADA's official code descriptors (those are copyrighted).
+# Names are obviously fictional, dates of birth and member numbers are invented, and no real insurer's terms are copied.
+# Plan year is the calendar year. "used" counts how many times a member has already had a procedure in the current frequency period.
+# Adding a member needs no code change: add an entry under `members`, with a `note` saying what it is for.
+
+plans:
+  GOLD:
+    name: Acme Gold Dental
+    annual_maximum: 1500
+    deductible: 50
+    deductible_waived_for: [preventive]
+    percent: {preventive: 100, basic: 80, major: 50}
+  SILVER:
+    name: Acme Silver Dental
+    annual_maximum: 1000
+    deductible: 75
+    deductible_waived_for: [preventive]
+    percent: {preventive: 100, basic: 70, major: 40}
+
+# Procedure codes the line knows about. `category` picks the plan's percentage; `frequency` is the limit per period (null: none).
+procedures:
+  D0120: {description: routine exam, category: preventive, frequency: {times: 2, period: calendar year}}
+  D0150: {description: first full exam for a new patient, category: preventive, frequency: {times: 1, period: 3 years}}
+  D0210: {description: full set of x-rays, category: preventive, frequency: {times: 1, period: 3 years}}
+  D0274: {description: four bitewing x-rays, category: preventive, frequency: {times: 1, period: calendar year}}
+  D1110: {description: adult cleaning, category: preventive, frequency: {times: 2, period: calendar year}}
+  D1206: {description: fluoride varnish, category: preventive, frequency: {times: 1, period: calendar year}}
+  D2391: {description: one-surface tooth-coloured filling on a back tooth, category: basic, frequency: null}
+  D4341: {description: deep cleaning of four or more teeth in one quarter of the mouth, category: basic, frequency: {times: 1, period: 2 years}}
+  D7140: {description: simple tooth removal, category: basic, frequency: null}
+  D2740: {description: porcelain crown, category: major, frequency: {times: 1, period: 5 years}}
+  D3330: {description: root canal on a back tooth, category: major, frequency: null}
+
+members:
+  M100001:
+    first_name: Pat
+    last_name: Sample
+    date_of_birth: "1985-03-14"
+    plan: GOLD
+    status: active
+    effective_date: "2025-01-01"
+    annual_maximum_used: 0
+    deductible_met: 0
+    used: {}
+    note: The ordinary case. Active, nothing used, deductible not yet met.
+
+  M100002:
+    first_name: Robin
+    last_name: Example
+    date_of_birth: "1990-07-02"
+    plan: GOLD
+    status: active
+    effective_date: "2024-01-01"
+    annual_maximum_used: 180
+    deductible_met: 50
+    used: {D1110: 2, D0120: 2}
+    note: Frequency limits used up. Cleanings and exams are at their twice-a-year limit; the deductible is met.
+
+  M100003:
+    first_name: Casey
+    last_name: Placeholder
+    date_of_birth: "1978-11-30"
+    plan: SILVER
+    status: terminated
+    effective_date: "2023-01-01"
+    termination_date: "2026-06-30"
+    annual_maximum_used: 0
+    deductible_met: 0
+    used: {}
+    note: Terminated coverage. The line reports the end date and gives no coverage figures.
+
+  M100004:
+    first_name: Jordan
+    last_name: Testwell
+    date_of_birth: "2001-01-20"
+    plan: SILVER
+    status: active
+    effective_date: "2025-01-01"
+    annual_maximum_used: 880
+    deductible_met: 75
+    used: {D2740: 0}
+    note: Annual maximum nearly used. Only the remainder of the maximum is left for a major procedure.

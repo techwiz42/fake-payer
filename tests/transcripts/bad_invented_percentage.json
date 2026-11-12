@@ -1,0 +1,40 @@
+{
+ "note": "scripted transcript in the call log's turn shape",
+ "turns": [
+  {
+   "role": "tool_result",
+   "content": {
+    "verified": true,
+    "member": {
+     "first_name": "Pat",
+     "last_name": "Sample"
+    },
+    "eligibility": {
+     "status": "active",
+     "effective_date": "2025-01-01"
+    },
+    "plan": {
+     "name": "Acme Gold Dental",
+     "annual_maximum": 1500,
+     "annual_maximum_remaining": 1500,
+     "deductible": 50,
+     "deductible_remaining": 50
+    },
+    "procedure": {
+     "code": "D2391",
+     "found": true,
+     "description": "one-surface tooth-coloured filling on a back tooth",
+     "category": "basic",
+     "coverage_percent": 80,
+     "deductible_applies": true,
+     "frequency_limit": null,
+     "covered_now": true
+    }
+   }
+  },
+  {
+   "role": "assistant",
+   "text": "A filling is covered at ninety percent, and your deductible is fifty dollars."
+  }
+ ]
+}
