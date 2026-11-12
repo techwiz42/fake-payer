@@ -267,3 +267,11 @@ async def test_the_caller_talking_over_the_greeting_cuts_it_off(env, monkeypatch
     await until(lambda: env["tts"].cancelled == 1)
     env["call"].incoming.put_nowait(END)
     await task
+
+
+async def test_at_the_length_limit_the_time_is_up_message_is_played_before_the_hang_up(env, monkeypatch):
+    from fake_payer import audio
+    monkeypatch.setattr(audio, "FRAME_SECONDS", 0)
+    bridge = VoiceBridge(settings(max_call_seconds=0.2, time_up_audio=b"t" * 640), {}, "persona")
+    await asyncio.wait_for(bridge.run(env["call"]), timeout=3)
+    assert env["call"].played == [b"t" * 320, b"t" * 320] and env["call"].closed.is_set() and bridge.terminated_by == "watchdog"

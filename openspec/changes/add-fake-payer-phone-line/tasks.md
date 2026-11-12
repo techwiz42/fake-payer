@@ -12,13 +12,15 @@
 - [x] 2.2 Copy `anthropic_streaming_client.py` and its tests, replacing the platform constants with local configuration. Verify: its tests pass here.
 - [x] 2.3 Copy `soniox_ncco.py`. Verify: it produces the answer response with the PCM 8 kHz content type, checked by a test.
 - [x] 2.4 Copy `soniox_stitched_bridge.py` and cut it down: remove redaction, tenant configuration, persistence, payer-call control and placeholder restoring; keep turn taking, barge-in, streaming reply and the watchdog. Verify: a scripted-audio test covers a turn and a barge-in; the file has no import from the platform.
-- [ ] 2.5 Text-to-speech voice set to "Mark" from configuration, for every utterance. Verify: a test shows each text-to-speech request, including the disclosure and a refusal, names that voice.
+- [x] 2.5 Text-to-speech voice set to "Mark" from configuration, for every utterance. Verify: a test shows each text-to-speech request, including the disclosure and a refusal, names that voice.
 - [x] 2.6 Opening line replaced by the fictional provider's disclosure. Verify: a test transcript begins with it.
 
 ## 3. Answering a call
 
 - [x] 3.1 One small server with the answer request and the audio websocket, and nothing else. Verify: a local simulated Vonage connection gets an answer response and an open audio stream; any other path is refused.
 - [x] 3.2 Run a call through the bridge end to end with the lookup tool in place of the platform's dispatcher. Verify: a simulated caller asks a coverage question and is answered by speech.
+
+- [x] 3.3 Only a call that came through the answer request can open the audio websocket: the answer request needs a secret key in its URL and signs a short-lived token into the websocket address; the websocket refuses anything without a valid one. Caller numbers are kept only as a keyed hash and the last four digits. Verify: tests for a missing key, a wrong key, no token, a token for another call, a forged and an expired token; no speech service is touched by a refused connection.
 
 ## 4. Coverage answers
 
@@ -28,9 +30,9 @@
 
 ## 5. Limits and log
 
-- [ ] 5.1 Simultaneous-call cap, per-number hourly count (calls with no number share one), call length limit, daily spend ceiling, each with a spoken refusal that uses no speech or model service. Verify: tests with a fake clock for each limit.
-- [ ] 5.2 Call log: one file per call with the contents the spec lists. Verify: a test call produces one complete entry with the number masked.
-- [ ] 5.3 Command to list and print calls by reference, and to remove old ones (retention). Verify: a known reference prints its call; an old entry is removed and a recent one kept.
+- [x] 5.1 Simultaneous-call cap, per-number hourly count (calls with no number share one), call length limit, daily spend ceiling, each with a spoken refusal that uses no speech or model service. Verify: tests with a fake clock for each limit.
+- [x] 5.2 Call log: one file per call with the contents the spec lists. Verify: a test call produces one complete entry with the number masked.
+- [x] 5.3 Command to list and print calls by reference, and to remove old ones (retention). Verify: a known reference prints its call; an old entry is removed and a recent one kept.
 
 ## 6. Hosting and number
 

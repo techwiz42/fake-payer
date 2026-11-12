@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from .config import Config, ConfigError
+from .refusals import Refusals
 from .server import FakePayerServer
 
 
@@ -19,10 +20,24 @@ def _load_dotenv(path: Path) -> None:
 
 
 async def _run(config: Config) -> None:
-    server = FakePayerServer(config)
-    async with server.serve() as running:
-        logging.getLogger("fake_payer").info("listening on %s:%s", config.listen_host, config.port)
-        await running.serve_forever()
+    refusals = Refusals()
+    await refusals.prepare(config)                      # the spoken refusals, from the cache or synthesized once
+    server = FakePayerServer(config, refusals=refusals)
+
+    async def keep_log_tidy() -> None:
+        while True:
+            removed = server.cleanup_log()
+            if removed:
+                logging.getLogger("fake_payer").info("removed %d call log entries past retention", removed)
+            await asyncio.sleep(6 * 3600)
+
+    tidy = asyncio.create_task(keep_log_tidy())
+    try:
+        async with server.serve() as running:
+            logging.getLogger("fake_payer").info("listening on %s:%s", config.listen_host, config.port)
+            await running.serve_forever()
+    finally:
+        tidy.cancel()
 
 
 def main() -> int:

@@ -1,5 +1,6 @@
 # Copied from agent_framework b227c23b: modules/communication/backend/soniox_stitched_bridge.py
-# Changes: the privacy-redaction step and the placeholder helpers, the tenant and practice configuration, call persistence, the payer-call control, the language hints
+# Changes: at the call-length limit the watchdog first plays a stored "time is up" message; tool results are kept whole in the transcript (the original cut them to 500 characters);
+# the privacy-redaction step and the placeholder helpers, the tenant and practice configuration, call persistence, the payer-call control, the language hints
 # and the platform's tool dispatcher are removed. The call's audio goes through a small CallSocket (below) where the original took the web framework's websocket, so the
 # server that carries it can be any. Tools are a name -> (definition, async function) mapping run in this file. The turn state machine, barge-in, streaming reply into
 # speech, the greeting and the call-length watchdog are as they were.
@@ -30,6 +31,7 @@ from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Protocol, Tuple
 
 from .anthropic_streaming_client import StreamedAssistantMessage, ToolUseCall, run_claude_turn
+from .audio import play_pcm
 from .soniox_streaming_client import (
     SonioxSTTClient,
     SonioxTTSClient,
@@ -79,8 +81,9 @@ class BridgeSettings:
     stt_model: str = "stt-rt-preview"
     tts_model: str = "tts-rt-v1"
     tts_voice: str = "Mark"
-    max_call_seconds: int = 300
+    max_call_seconds: float = 300
     language: str = "en"
+    time_up_audio: Optional[bytes] = None      # said, in the same voice, just before the line hangs up at the length limit
 
 
 @dataclass
@@ -403,7 +406,7 @@ class VoiceBridge:
                 tool_result_blocks.append(block)
                 self._transcript.append(TurnRecord(
                     role="tool_result",
-                    text=str(block.get("content", ""))[:500],
+                    text=str(block.get("content", "")),
                     tool_uses=[{"name": tu.name, "tool_use_id": tu.id}],
                 ))
             self._messages.append({"role": "user", "content": tool_result_blocks})
@@ -504,6 +507,12 @@ class VoiceBridge:
             if remaining <= 0:
                 logger.info("Watchdog triggered: call %s exceeded %ds", self._cfg.call_uuid, self._cfg.max_call_seconds)
                 self._terminated_by = "watchdog"
+                if self._cfg.time_up_audio:
+                    await self._barge_in()                           # stop whatever is being said, then say the time is up
+                    try:
+                        await play_pcm(call, self._cfg.time_up_audio)
+                    except Exception as exc:
+                        logger.debug("time-up message failed (best-effort): %s", exc)
                 await self._hang_up(call)
                 return
             await asyncio.sleep(min(remaining, 5.0))

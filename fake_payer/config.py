@@ -9,12 +9,19 @@ import os
 from dataclasses import dataclass, fields
 from typing import Mapping, Optional
 
-REQUIRED = ("SONIOX_API_KEY", "ANTHROPIC_API_KEY", "FAKE_PAYER_NUMBER")
-_SECRETS = ("soniox_api_key", "anthropic_api_key")
+REQUIRED = ("SONIOX_API_KEY", "ANTHROPIC_API_KEY", "FAKE_PAYER_NUMBER", "ANSWER_KEY")
+_SECRETS = ("soniox_api_key", "anthropic_api_key", "answer_key")
 
 
 class ConfigError(Exception):
     """The configuration cannot be used. The message names variables, never values."""
+
+
+def _answer_key(raw: str) -> str:
+    key = raw.strip()
+    if len(key) < 16 or not key.replace("-", "").replace("_", "").isalnum():
+        raise ConfigError("ANSWER_KEY must be at least 16 letters, digits, dashes or underscores")
+    return key
 
 
 @dataclass(frozen=True)
@@ -22,8 +29,9 @@ class Config:
     soniox_api_key: str
     anthropic_api_key: str
     number: str                                   # the line's own number
+    answer_key: str                               # a secret in the answer URL given to Vonage: only requests carrying it are answered
     max_concurrent_calls: int = 3
-    max_calls_per_number_per_hour: int = 5
+    max_calls_per_number_per_hour: int = 120
     max_call_seconds: int = 300
     daily_spend_ceiling_usd: float = 5.0
     log_retention_days: int = 7
@@ -32,6 +40,8 @@ class Config:
     stt_model: str = "stt-rt-preview"
     listen_host: str = "127.0.0.1"
     port: int = 8080
+    cost_per_minute_usd: float = 0.15
+    audio_cache_dir: str = "audio_cache"
     tts_model: str = "tts-rt-v1"
 
     def __repr__(self) -> str:
@@ -63,8 +73,9 @@ class Config:
             soniox_api_key=env["SONIOX_API_KEY"].strip(),
             anthropic_api_key=env["ANTHROPIC_API_KEY"].strip(),
             number=env["FAKE_PAYER_NUMBER"].strip(),
+            answer_key=_answer_key(env["ANSWER_KEY"]),
             max_concurrent_calls=number("MAX_CONCURRENT_CALLS", 3, int),
-            max_calls_per_number_per_hour=number("MAX_CALLS_PER_NUMBER_PER_HOUR", 5, int),
+            max_calls_per_number_per_hour=number("MAX_CALLS_PER_NUMBER_PER_HOUR", 120, int),
             max_call_seconds=number("MAX_CALL_SECONDS", 300, int),
             daily_spend_ceiling_usd=number("DAILY_SPEND_CEILING_USD", 5.0, float),
             log_retention_days=number("LOG_RETENTION_DAYS", 7, int),
@@ -73,5 +84,7 @@ class Config:
             stt_model=(env.get("SONIOX_STT_MODEL") or "stt-rt-preview").strip(),
             listen_host=(env.get("LISTEN_HOST") or "127.0.0.1").strip(),
             port=number("PORT", 8080, int),
+            cost_per_minute_usd=number("COST_PER_MINUTE_USD", 0.15, float),
+            audio_cache_dir=(env.get("AUDIO_CACHE_DIR") or "audio_cache").strip(),
             tts_model=(env.get("SONIOX_TTS_MODEL") or "tts-rt-v1").strip(),
         )

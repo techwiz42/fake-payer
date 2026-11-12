@@ -1,6 +1,6 @@
 # Copied from agent_framework b227c23b: modules/communication/backend/soniox_ncco.py
 # Changes: the outbound URL, the "can Soniox run at all" gate (it read the platform's communication config; this program's own configuration refuses to start
-# without the key) and the platform's route path are removed; the websocket path is this program's own.
+# without the key) and the platform's route path are removed; the websocket path is this program's own, and its address may carry a signed token (tokens.py).
 """
 The Vonage NCCO that connects an inbound call to the voice bridge.
 
@@ -14,8 +14,8 @@ CONTENT_TYPE = "audio/l16;rate=8000"
 BRIDGE_PATH = "/ws"
 
 
-def inbound_ws_url(host: str, call_uuid: str) -> str:
-    return f"wss://{host}{BRIDGE_PATH}/{call_uuid}"
+def inbound_ws_url(host: str, call_uuid: str, query: str = "") -> str:
+    return f"wss://{host}{BRIDGE_PATH}/{call_uuid}" + (f"?{query}" if query else "")
 
 
 def build_ncco(ws_url: str) -> List[Dict[str, Any]]:

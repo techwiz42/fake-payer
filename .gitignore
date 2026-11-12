@@ -8,3 +8,4 @@ calls/
 *.log
 .DS_Store
 *.egg-info/
+audio_cache/

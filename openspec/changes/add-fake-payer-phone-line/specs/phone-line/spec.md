@@ -16,6 +16,17 @@ The line SHALL answer an inbound call, speak a short disclosure naming the provi
 - **WHEN** the caller asks which company this is
 - **THEN** the answer is the fictional provider's name and nothing that identifies a real insurer
 
+### Requirement: Only real calls
+Only a call that came through the line's answer request SHALL be able to open the call's audio stream. The answer request SHALL be answered only when it carries the configured secret key, and SHALL sign a short-lived token into the audio stream's address; the audio stream SHALL be refused without a valid, unexpired token for that call. A refused connection SHALL use no speech or model service. Caller numbers SHALL be kept only as a keyed hash (to count calls per number) and their last four digits (for the log).
+
+#### Scenario: Someone connects to the audio stream directly
+- **WHEN** a connection to the audio stream carries no token, a token for another call, or a forged or expired one
+- **THEN** it is refused before anything is spoken, and no speech or model service is used
+
+#### Scenario: An answer request without the key
+- **WHEN** the answer request does not carry the secret key
+- **THEN** it is refused and no token is issued
+
 ### Requirement: Voice
 The line SHALL speak every utterance, including the disclosure and the spoken refusals, in the Soniox voice named "Mark".
 
