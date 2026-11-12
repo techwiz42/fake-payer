@@ -44,6 +44,35 @@ def test_two_rings_are_the_default_and_zero_turns_them_off():
     assert Config.from_env({**env, "RING_COUNT": "0"}).ring_count == 0
 
 
+def test_the_line_waits_two_seconds_after_the_ringing_before_it_speaks_unless_told_otherwise():
+    env = {"SONIOX_API_KEY": "k", "ANTHROPIC_API_KEY": "m", "FAKE_PAYER_NUMBER": "+12025550123", "ANSWER_KEY": "x" * 32}
+    assert Config.from_env(env).answer_delay_seconds == 2.0
+    assert Config.from_env({**env, "ANSWER_DELAY_SECONDS": "0"}).answer_delay_seconds == 0
+    with pytest.raises(Exception):
+        Config.from_env({**env, "ANSWER_DELAY_SECONDS": "30"})
+
+
+@pytest.mark.asyncio
+async def test_the_greeting_waits_for_the_answer_delay_after_the_ringing():
+    import time
+    started = {}
+    bridge = VoiceBridge(BridgeSettings(call_uuid="c", greeting="hi", soniox_api_key="k", answer_delay_seconds=0.3), {}, "persona")
+
+    async def connect():
+        bridge._tts = MagicMock(synthesize=AsyncMock(side_effect=lambda text: started.setdefault("at", time.monotonic()) and "s1"))
+    bridge._connect_legs = connect
+    bridge._vonage_to_stt = AsyncMock(return_value=None)
+    bridge._stt_event_loop = AsyncMock(return_value=None)
+    bridge._tts_event_loop = AsyncMock(return_value=None)
+    bridge._watchdog = AsyncMock(return_value=None)
+    begun = time.monotonic()
+    try:
+        await asyncio.wait_for(bridge.run(MagicMock(send_audio=AsyncMock())), 3)
+    except Exception:
+        pass
+    assert started["at"] - begun >= 0.28
+
+
 @pytest.mark.asyncio
 async def test_the_ringing_is_played_before_the_greeting_is_spoken():
     events = []
@@ -62,3 +91,25 @@ async def test_the_ringing_is_played_before_the_greeting_is_spoken():
     except Exception:
         pass
     assert events[:2] == ["ring", "ring"] and events.index("greeting") > events.index("ring")
+
+
+def test_a_reply_waits_two_seconds_from_the_end_of_the_question_unless_told_otherwise():
+    env = {"SONIOX_API_KEY": "k", "ANTHROPIC_API_KEY": "m", "FAKE_PAYER_NUMBER": "+12025550123", "ANSWER_KEY": "x" * 32}
+    assert Config.from_env(env).reply_delay_seconds == 2.0
+    assert Config.from_env({**env, "REPLY_DELAY_SECONDS": "0"}).reply_delay_seconds == 0
+
+
+@pytest.mark.asyncio
+async def test_the_first_sound_of_a_reply_is_no_sooner_than_the_reply_delay_after_the_caller_stopped():
+    import time
+    bridge = VoiceBridge(BridgeSettings(call_uuid="c", greeting="hi", soniox_api_key="k", reply_delay_seconds=0.3), {}, "persona")
+    sent = []
+    call = MagicMock(send_audio=AsyncMock(side_effect=lambda frame: sent.append(time.monotonic())))
+    bridge._live_ids.add("s1")
+    bridge._turn_end_at = time.monotonic()                                        # the caller has just finished speaking
+    begun = time.monotonic()
+    bridge._playout.put_nowait(("s1", b"\x00" * 320))
+    task = asyncio.create_task(bridge._playout_loop(call))
+    await asyncio.sleep(0.5)
+    task.cancel()
+    assert sent and sent[0] - begun >= 0.28

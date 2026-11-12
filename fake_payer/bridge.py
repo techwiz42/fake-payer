@@ -94,6 +94,8 @@ class BridgeSettings:
     hold_audio: Optional[bytes] = None         # "one moment while I look that up": played at once when the model asks for a lookup before it has said anything
     hold_text: str = ""                        # what hold_audio says, for the transcript
     ring_audio: Optional[bytes] = None         # the ringing the caller hears before the line answers
+    reply_delay_seconds: float = 0.0           # the least time from the caller finishing a question to the first sound of the reply
+    answer_delay_seconds: float = 0.0          # silence after the ringing, before the greeting
 
 
 @dataclass
@@ -180,6 +182,8 @@ class VoiceBridge:
 
             if self._cfg.ring_audio:                                  # the line rings before anyone picks up
                 await play_pcm(call, self._cfg.ring_audio)
+            if self._cfg.answer_delay_seconds > 0:                     # then a moment before it speaks, as a person picking up would take
+                await asyncio.sleep(self._cfg.answer_delay_seconds)
 
             # Initial greeting. The bridge is otherwise purely reactive: it waits for STT speech-ended before doing anything. Without a proactive greeting the
             # caller hears silence and hangs up (observed: 36 s -> caller-terminated, 0 turns).
@@ -359,6 +363,10 @@ class VoiceBridge:
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
                 continue
+            if self._turn_end_at is not None and self._cfg.reply_delay_seconds > 0:
+                wait = self._turn_end_at + self._cfg.reply_delay_seconds - time.monotonic()
+                if wait > 0:                                          # a person takes a moment to answer: the first sound comes this long after the caller stopped
+                    await asyncio.sleep(wait)
             for start in range(0, len(data), FRAME_BYTES):
                 ahead = self._play_until - time.monotonic()
                 if ahead > PLAYOUT_LEAD_SECONDS:

@@ -43,6 +43,8 @@ class Config:
     cost_per_minute_usd: float = 0.15
     audio_cache_dir: str = "audio_cache"
     tts_model: str = "tts-rt-v1"
+    reply_delay_seconds: float = 2.0              # the least time from the caller finishing to the first sound of the reply
+    answer_delay_seconds: float = 2.0             # silence between the last ring and the greeting
     ring_count: int = 2                           # rings the caller hears before the line answers; 0 answers at once
 
     def __repr__(self) -> str:
@@ -62,6 +64,22 @@ class Config:
         if not raw_rings.isdigit() or int(raw_rings) > 6:
             raise ConfigError("RING_COUNT must be a whole number from 0 (answer at once) to 6")
         ring_count = int(raw_rings)
+
+        raw_delay = (env.get("ANSWER_DELAY_SECONDS") or "").strip() or "2"
+        try:
+            answer_delay = float(raw_delay)
+        except ValueError:
+            raise ConfigError("ANSWER_DELAY_SECONDS is not a valid number") from None
+        if not 0 <= answer_delay <= 10:
+            raise ConfigError("ANSWER_DELAY_SECONDS must be from 0 to 10")
+
+        raw_reply = (env.get("REPLY_DELAY_SECONDS") or "").strip() or "2"
+        try:
+            reply_delay = float(raw_reply)
+        except ValueError:
+            raise ConfigError("REPLY_DELAY_SECONDS is not a valid number") from None
+        if not 0 <= reply_delay <= 10:
+            raise ConfigError("REPLY_DELAY_SECONDS must be from 0 to 10")
 
         def number(name: str, default, kind):
             raw = (env.get(name) or "").strip()
@@ -94,4 +112,6 @@ class Config:
             audio_cache_dir=(env.get("AUDIO_CACHE_DIR") or "audio_cache").strip(),
             tts_model=(env.get("SONIOX_TTS_MODEL") or "tts-rt-v1").strip(),
             ring_count=ring_count,
+            answer_delay_seconds=answer_delay,
+            reply_delay_seconds=reply_delay,
         )
