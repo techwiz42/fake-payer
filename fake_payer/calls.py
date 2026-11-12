@@ -33,7 +33,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     log = CallLog(os.environ.get("CALL_LOG_DIR") or "calls")
     if args.command == "list":
         for entry in log.recent(args.limit):
-            print(f"{entry['time']}  {entry['reference']}  {entry['caller']:<9} {entry['ended']:<16} {entry['duration_seconds']:>6}s  turns={entry['turns']}  ungrounded={entry['ungrounded']}")
+            print(f"{entry['time']}  {entry['reference']}  {entry['caller']:<9} {entry['ended']:<16} {entry['duration_seconds']:>6}s  turns={entry['turns']}  ungrounded={entry['ungrounded']}  reply latency median/max={entry['latency_median_ms']}/{entry['latency_max_ms']} ms")
         return 0
     if args.command == "show":
         record = log.get(args.reference)

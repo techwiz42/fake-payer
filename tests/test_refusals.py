@@ -40,7 +40,7 @@ async def test_every_phrase_is_synthesized_once_in_the_configured_voice(tmp_path
     monkeypatch.setattr(refusals_module, "SonioxTTSClient", SynthTTS)
     refusals = Refusals()
     await refusals.prepare(config(tmp_path))
-    assert set(refusals.audio) == set(PHRASES) == {"busy", "rate", "spend", "time"}
+    assert set(refusals.audio) == set(PHRASES) == {"busy", "rate", "spend", "time", "hold"}
     assert {c.kw["voice"] for c in SynthTTS.made} == {"Adrian"} and {c.kw["sample_rate"] for c in SynthTTS.made} == {8000}
     assert sorted(t for c in SynthTTS.made for t in c.said) == sorted(PHRASES.values())
 

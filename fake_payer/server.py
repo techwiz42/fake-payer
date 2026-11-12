@@ -28,7 +28,7 @@ from .config import Config
 from .coverage import Fixture, make_tools
 from .limits import Limits
 from .persona import DISCLOSURE, build_system_prompt, call_reference
-from .refusals import Refusals
+from .refusals import PHRASES, Refusals
 from .soniox_ncco import BRIDGE_PATH, build_ncco, inbound_ws_url
 from .tokens import CallTokens, key_matches
 
@@ -136,6 +136,8 @@ class FakePayerServer:
             tts_voice=self._config.tts_voice,
             max_call_seconds=self._config.max_call_seconds,
             time_up_audio=self._refusals.audio.get("time"),
+            hold_audio=self._refusals.audio.get("hold"),
+            hold_text=PHRASES["hold"],
         )
         bridge = VoiceBridge(settings, self._tools, self._system_prompt if self._system_prompt is not None else build_system_prompt(call_uuid))
         try:
@@ -145,11 +147,11 @@ class FakePayerServer:
         finally:
             self._limits.release(handle)
             self._active_calls.discard(call_uuid)
-            self._write_log(call_uuid, caller.last4, ended_by(bridge.terminated_by), bridge.duration_seconds, turns_from_transcript(bridge.transcript))
+            self._write_log(call_uuid, caller.last4, ended_by(bridge.terminated_by), bridge.duration_seconds, turns_from_transcript(bridge.transcript), bridge.reply_latencies_ms)
 
-    def _write_log(self, call_uuid: str, last4: str, ended: str, duration: float = 0.0, turns=None) -> None:
+    def _write_log(self, call_uuid: str, last4: str, ended: str, duration: float = 0.0, turns=None, latencies=None) -> None:
         try:
-            self._log.write(reference=call_reference(call_uuid), last4=last4, ended=ended, duration_seconds=duration, turns=turns)
+            self._log.write(reference=call_reference(call_uuid), last4=last4, ended=ended, duration_seconds=duration, turns=turns, reply_latency_ms=latencies)
         except Exception:
             logger.exception("could not write the log entry for call %s", call_uuid)
 

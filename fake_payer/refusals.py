@@ -1,4 +1,4 @@
-"""What the line says when it cannot take a call, in the configured voice, without using a speech service per call.
+"""What the line says from stored audio, in the configured voice, without using a speech service per call: the refusals when it cannot take a call, and a "one moment".
 
 Each phrase is synthesized once with Soniox and kept (in memory and in a cache directory), so a refused call plays stored audio. If a phrase cannot be synthesized the line
 still refuses, in silence.
@@ -20,6 +20,8 @@ PHRASES: Dict[str, str] = {
     "rate": "I'm sorry, we cannot take another call from this number right now. Please try again later. Goodbye.",
     "spend": "I'm sorry, this line is not taking calls right now. Please try again tomorrow. Goodbye.",
     "time": "I'm sorry, we have reached the time limit for this call. Goodbye.",
+    # Not a refusal: said at once when a lookup is needed, while the lookup and the answer are prepared.
+    "hold": "One moment while I look that up.",
 }
 
 

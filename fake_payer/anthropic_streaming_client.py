@@ -1,6 +1,6 @@
 # Copied from agent_framework b227c23b: core/anthropic_streaming_client.py
 # Changes: the key lookup, default model and URL, which the original took from the platform's own client module, are defined here;
-# the model override variable is FAKE_PAYER_MODEL instead of ORCA_MODEL.
+# the model override variable is FAKE_PAYER_MODEL instead of ORCA_MODEL; the request turns the model's own reasoning off (it added about 0.8 s before the first word).
 # Changes from the original are listed in this header; everything else is as it was.
 """
 Anthropic streaming client with tool-use assembly.
@@ -167,6 +167,9 @@ async def run_claude_turn(
         "stream": True,
         "system": [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
         "messages": messages,
+        # Measured on this line (2026-11-12): with tools present the model reasons before it speaks by default, which took the time to the first word from 0.52 s to 1.34 s.
+        # On a phone call that is dead air, and a lookup-and-answer persona does not need it.
+        "thinking": {"type": "disabled"},
     }
     if tools:
         payload["tools"] = tools

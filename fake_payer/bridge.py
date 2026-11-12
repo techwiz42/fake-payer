@@ -1,5 +1,6 @@
 # Copied from agent_framework b227c23b: modules/communication/backend/soniox_stitched_bridge.py
-# Changes: audio goes to the caller at the pace it is heard (never more than a fraction of a second ahead), and the agent counts as speaking until it has played, so a
+# Changes: when the model asks for a lookup before it has said anything, a stored "one moment" is played at once (the lookup and the second model call take a second or
+# more); how long each reply took to start is measured; audio goes to the caller at the pace it is heard (never more than a fraction of a second ahead), and the agent counts as speaking until it has played, so a
 # caller breaking in cuts a reply off (the original sent each reply as fast as it was synthesized, which sits in the telephony provider's buffer where a barge-in cannot reach);
 # at the call-length limit the watchdog first plays a stored "time is up" message; tool results are kept whole in the transcript (the original cut them to 500 characters);
 # the privacy-redaction step and the placeholder helpers, the tenant and practice configuration, call persistence, the payer-call control, the language hints
@@ -90,6 +91,8 @@ class BridgeSettings:
     max_call_seconds: float = 300
     language: str = "en"
     time_up_audio: Optional[bytes] = None      # said, in the same voice, just before the line hangs up at the length limit
+    hold_audio: Optional[bytes] = None         # "one moment while I look that up": played at once when the model asks for a lookup before it has said anything
+    hold_text: str = ""                        # what hold_audio says, for the transcript
 
 
 @dataclass
@@ -133,6 +136,12 @@ class VoiceBridge:
         # Audio from text-to-speech waits here and is played out at the pace it is heard; `_play_until` is when what has been sent will have finished playing.
         self._playout: asyncio.Queue = asyncio.Queue()
         self._play_until = 0.0
+        self._live_ids: set = set()              # audio from these syntheses (and stored phrases) may still be played; a barge-in empties it
+        self._held_this_turn = False
+        self._holds = 0
+        # How long each reply took to begin: from the end-of-speech signal (Soniox raises it about 0.3 s after the caller stops) to the first audio sent.
+        self._turn_end_at: Optional[float] = None
+        self._reply_latencies: List[float] = []
 
         # Terminal outcome (stamped at close time).
         self._failure_reason: Optional[str] = None
@@ -174,6 +183,7 @@ class VoiceBridge:
                 greeting = self._cfg.greeting
                 assert self._tts is not None
                 self._active_tts_synthesis_id = await self._tts.synthesize(greeting)
+                self._live_ids.add(self._active_tts_synthesis_id)
                 self._state = BridgeState.AGENT_SPEAKING
                 logger.info("bridge initial greeting queued (call=%s synth_id=%s)", self._cfg.call_uuid, self._active_tts_synthesis_id)
             except Exception as e:
@@ -299,6 +309,7 @@ class VoiceBridge:
                     user_text = "".join(self._pending_user_text).strip()
                     self._pending_user_text.clear()
                     # Advance a turn.
+                    self._turn_end_at = time.monotonic()
                     self._state = BridgeState.THINKING
                     self._schedule_advance_turn(user_text)
 
@@ -336,8 +347,8 @@ class VoiceBridge:
         """
         while True:
             synthesis_id, data = await self._playout.get()
-            if synthesis_id != self._active_tts_synthesis_id:
-                continue                                              # cancelled by a barge-in, or superseded
+            if synthesis_id not in self._live_ids:
+                continue                                              # cancelled by a barge-in
             if data is None:
                 delay = max(0.0, self._play_until - time.monotonic())
                 task = asyncio.create_task(self._listening_after(synthesis_id, delay))
@@ -348,7 +359,7 @@ class VoiceBridge:
                 ahead = self._play_until - time.monotonic()
                 if ahead > PLAYOUT_LEAD_SECONDS:
                     await asyncio.sleep(ahead - PLAYOUT_LEAD_SECONDS)
-                if synthesis_id != self._active_tts_synthesis_id:
+                if synthesis_id not in self._live_ids:
                     break                                             # cut off while waiting
                 frame = data[start:start + FRAME_BYTES]
                 try:
@@ -357,7 +368,12 @@ class VoiceBridge:
                     logger.info("send to the caller failed (call=%s err=%r)", self._cfg.call_uuid, e)
                     self._terminated_by = self._terminated_by or "caller"
                     return
-                self._play_until = max(self._play_until, time.monotonic()) + len(frame) / BYTES_PER_SECOND
+                now = time.monotonic()
+                self._play_until = max(self._play_until, now) + len(frame) / BYTES_PER_SECOND
+                if self._turn_end_at is not None:
+                    self._reply_latencies.append(now - self._turn_end_at)
+                    logger.info("reply_latency_ms=%d (call=%s; from the end-of-speech signal)", int(self._reply_latencies[-1] * 1000), self._cfg.call_uuid)
+                    self._turn_end_at = None
 
     async def _listening_after(self, synthesis_id: str, delay: float) -> None:
         """When a reply has finished playing, go back to listening (unless it was cut off or a newer one has begun)."""
@@ -374,6 +390,8 @@ class VoiceBridge:
             self._claude_cancel.set()
         # Invalidate the current synthesis so any already-buffered chunks are dropped.
         self._active_tts_synthesis_id = None
+        self._live_ids.clear()
+        self._turn_end_at = None                                      # the reply being timed was cut off, not started late
         while not self._playout.empty():                              # audio generated but not yet sent is dropped
             self._playout.get_nowait()
         self._play_until = time.monotonic()
@@ -423,6 +441,7 @@ class VoiceBridge:
 
         # Start a fresh cancel event scoped to this turn.
         self._claude_cancel = asyncio.Event()
+        self._held_this_turn = False
 
         # Loop: keep running Claude turns while the model returns tool_use blocks.
         while True:
@@ -496,6 +515,7 @@ class VoiceBridge:
                 # own default).
                 turn_synthesis_id = await self._tts.begin_stream(language=self._caller_language)
                 self._active_tts_synthesis_id = turn_synthesis_id
+                self._live_ids.add(turn_synthesis_id)
                 self._state = BridgeState.AGENT_SPEAKING
             try:
                 await self._tts.send_text_chunk(text, turn_synthesis_id)
@@ -507,8 +527,17 @@ class VoiceBridge:
                 await send_speech(chunk)
 
         async def on_tool_use(call: ToolUseCall) -> None:
-            # Tools are run centrally in _advance_turn; this callback is just a hook for metrics / tracing if needed.
+            # Tools are run centrally in _advance_turn. The lookup and the second model call take a second or more, so unless the model has already said something,
+            # play the stored "one moment" now: the caller hears a person starting to answer, and the answer queues up behind it.
             logger.debug("Claude requested tool: %s", call.name)
+            if turn_synthesis_id is None and self._cfg.hold_audio and not self._held_this_turn:
+                self._held_this_turn = True
+                self._holds += 1
+                hold_id = f"hold-{self._holds}"
+                self._live_ids.add(hold_id)
+                self._state = BridgeState.AGENT_SPEAKING
+                self._transcript.append(TurnRecord(role="assistant", text=self._cfg.hold_text))
+                self._playout.put_nowait((hold_id, self._cfg.hold_audio))
 
         try:
             assistant = await run_claude_turn(
@@ -584,6 +613,10 @@ class VoiceBridge:
     @property
     def terminated_by(self) -> Optional[str]:
         return self._terminated_by
+
+    @property
+    def reply_latencies_ms(self) -> List[int]:
+        return [int(x * 1000) for x in self._reply_latencies]
 
     @property
     def duration_seconds(self) -> float:

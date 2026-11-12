@@ -1,23 +1,36 @@
 # The fictional members, plans and coverage the line answers from. Everything here is made up.
 #
-# Descriptions of procedures are plain-language, written for this file; they are not the ADA's official code descriptors (those are copyrighted).
-# Names are obviously fictional, dates of birth and member numbers are invented, and no real insurer's terms are copied.
-# Plan year is the calendar year. "used" counts how many times a member has already had a procedure in the current frequency period.
+# The shape follows how dental plans are commonly described (preventive / basic / major tiers at about 100 / 80 / 50 percent, a small deductible waived for preventive care,
+# an annual maximum of one to two thousand dollars, waiting periods that grow with the tier, frequency limits, orthodontics separate with a lifetime maximum), without copying
+# any insurer's terms. Descriptions of procedures are plain-language, written for this file; they are not the ADA's official code descriptors (those are copyrighted).
+# Names are obviously fictional, dates of birth, member and group numbers are invented. Plan year is the calendar year. "used" counts how many times a member has already had
+# a procedure in the current frequency period.
 # Adding a member needs no code change: add an entry under `members`, with a `note` saying what it is for.
+
+categories: [preventive, basic, major, orthodontics]        # the order benefits are given in
 
 plans:
   GOLD:
     name: Acme Gold Dental
     annual_maximum: 1500
     deductible: 50
+    family_deductible: 150
     deductible_waived_for: [preventive]
-    percent: {preventive: 100, basic: 80, major: 50}
+    waiting_period_months: {preventive: 0, basic: 6, major: 12, orthodontics: 12}
+    percent: {preventive: 100, basic: 80, major: 50, orthodontics: 50}
+    orthodontic_lifetime_maximum: 1500
   SILVER:
     name: Acme Silver Dental
     annual_maximum: 1000
     deductible: 75
+    family_deductible: 225
     deductible_waived_for: [preventive]
-    percent: {preventive: 100, basic: 70, major: 40}
+    waiting_period_months: {preventive: 0, basic: 6, major: 12}
+    percent: {preventive: 100, basic: 70, major: 40}          # no orthodontic benefit
+
+groups:
+  G10001: {plan: GOLD, employer: Sample Manufacturing Company}
+  G20002: {plan: SILVER, employer: Example Retail Group}
 
 # Procedure codes the line knows about. `category` picks the plan's percentage; `frequency` is the limit per period (null: none).
 procedures:
@@ -32,6 +45,7 @@ procedures:
   D7140: {description: simple tooth removal, category: basic, frequency: null}
   D2740: {description: porcelain crown, category: major, frequency: {times: 1, period: 5 years}}
   D3330: {description: root canal on a back tooth, category: major, frequency: null}
+  D8080: {description: comprehensive braces treatment, category: orthodontics, frequency: null}
 
 members:
   M100001:
@@ -39,6 +53,7 @@ members:
     last_name: Sample
     date_of_birth: "1985-03-14"
     plan: GOLD
+    group_number: G10001
     status: active
     effective_date: "2025-01-01"
     annual_maximum_used: 0
@@ -51,6 +66,7 @@ members:
     last_name: Example
     date_of_birth: "1990-07-02"
     plan: GOLD
+    group_number: G10001
     status: active
     effective_date: "2024-01-01"
     annual_maximum_used: 180
@@ -63,6 +79,7 @@ members:
     last_name: Placeholder
     date_of_birth: "1978-11-30"
     plan: SILVER
+    group_number: G20002
     status: terminated
     effective_date: "2023-01-01"
     termination_date: "2026-06-30"
@@ -76,6 +93,7 @@ members:
     last_name: Testwell
     date_of_birth: "2001-01-20"
     plan: SILVER
+    group_number: G20002
     status: active
     effective_date: "2025-01-01"
     annual_maximum_used: 880

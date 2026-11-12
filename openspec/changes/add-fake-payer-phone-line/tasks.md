@@ -28,6 +28,10 @@
 - [x] 4.2 `lookup_coverage` and the identity check (member identifier, date of birth). Verify: match, mismatch and not-found tests.
 - [x] 4.3 Persona prompt that forbids stating values not returned by the tool, plus the representative name and a stable call reference. Verify: a replay test fails when a number in the speech is not in the tool results; the same reference is repeated on request.
 
+- [x] 4.4 The lookup works from whatever is given: a member is identified by member number or by name, with the date of birth; group number, practice and provider NPI and the last digits of the tax ID are accepted, listed as still wanted when missing, and never required; a valid group number alone gives the plan's benefits. Verify: tests for each combination, for the wrong-detail answer leaking nothing, and for NPIs and tax ID not changing the outcome.
+- [x] 4.5 Benefits by category with the services and limits in each, no procedure code needed; the fixture has groups, family deductibles, waiting periods and an orthodontic benefit with a lifetime maximum, shaped like commonly described dental plans. Verify: tests that a benefits question is answered with no code, and that a plan without orthodontics says so.
+- [x] 4.6 The persona asks for the missing details, a few at a time, and does not insist; it does not ask for a procedure code. Verify: prompt tests.
+
 ## 5. Limits and log
 
 - [x] 5.1 Simultaneous-call cap, per-number hourly count (calls with no number share one), call length limit, daily spend ceiling, each with a spoken refusal that uses no speech or model service. Verify: tests with a fake clock for each limit.

@@ -155,3 +155,16 @@ async def test_tool_use_still_assembled_correctly():
     assert len(result.tool_uses) == 1
     assert result.tool_uses[0].name == "check_availability"
     assert result.tool_uses[0].input == {"location_id": "abc"}
+
+
+@pytest.mark.asyncio
+async def test_the_request_turns_the_models_reasoning_off_because_it_is_dead_air_on_a_call():
+    captured = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, content=_sse_body(), headers={"content-type": "text/event-stream"})
+
+    streaming_client._shared_http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    await run_claude_turn(messages=[{"role": "user", "content": "hi"}], tools=[{"name": "t", "input_schema": {"type": "object"}}], system_prompt="x")
+    assert captured[0]["thinking"] == {"type": "disabled"}

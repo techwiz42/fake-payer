@@ -57,3 +57,17 @@ def test_the_prompt_names_the_representative_gives_the_reference_and_forbids_ung
 def test_the_prompt_names_no_real_insurer():
     from fake_payer.persona import build_system_prompt
     assert scan_text(build_system_prompt("x")) == []
+
+
+def test_the_prompt_asks_for_the_practice_provider_and_patient_details_without_requiring_them():
+    from fake_payer.persona import build_system_prompt
+    prompt = build_system_prompt("call-uuid-1")
+    for wanted in ("member number", "date of birth", "name", "group number", "practice's NPI", "provider's NPI", "last four digits of the practice's tax ID"):
+        assert wanted in prompt, wanted
+    assert "Do not insist and do not refuse to go on" in prompt and "still_needed" in prompt
+
+
+def test_the_prompt_does_not_ask_for_a_procedure_code_to_answer_a_benefits_question():
+    from fake_payer.persona import build_system_prompt
+    prompt = build_system_prompt("call-uuid-1")
+    assert "A procedure code is not needed" in prompt and "ask for the code" not in prompt.lower().replace("offer the code", "")

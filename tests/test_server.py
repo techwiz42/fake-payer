@@ -204,7 +204,7 @@ def limited_config(**env):
 def refusal_audio():
     from fake_payer.refusals import Refusals
     refusals = Refusals()
-    refusals.audio = {"busy": b"B" * 640, "rate": b"R" * 640, "spend": b"S" * 640, "time": b"T" * 640}
+    refusals.audio = {"busy": b"B" * 640, "rate": b"R" * 640, "spend": b"S" * 640, "time": b"T" * 640, "hold": b"H" * 640}
     return refusals
 
 

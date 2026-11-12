@@ -4,7 +4,7 @@ import asyncio
 import pytest
 
 from fake_payer import bridge as bridge_module
-from fake_payer.anthropic_streaming_client import StreamedAssistantMessage
+from fake_payer.anthropic_streaming_client import StreamedAssistantMessage, ToolUseCall
 from fake_payer.bridge import BridgeSettings, VoiceBridge
 from fake_payer.soniox_streaming_client import (
     STTFinalTranscript, STTSpeechEnded, STTSpeechStarted, TTSAudioChunk, TTSSynthesisComplete,
@@ -327,5 +327,93 @@ async def test_a_caller_breaking_in_while_the_reply_is_still_playing_cuts_it_off
     await asyncio.sleep(0.5)
     assert sum(len(f) for f in env["call"].played) == sent_at_cutoff               # nothing more is sent after the cut-off
     assert sent_at_cutoff < two_seconds * 0.5                                      # and most of the reply was never sent at all
+    env["call"].incoming.put_nowait(END)
+    await task
+
+
+async def test_a_lookup_turn_plays_the_stored_one_moment_at_once_and_the_answer_follows_it(env, monkeypatch):
+    """The lookup and the second model call take a second or more; the caller hears "one moment" straight away and the answer queues behind it."""
+    from fake_payer import audio
+    monkeypatch.setattr(audio, "FRAME_SECONDS", 0)
+    calls = []
+
+    async def lookup(arguments):
+        calls.append(arguments)
+        return {"percent": 80}
+
+    async def script(messages, on_text, cancel):
+        if len(env["turns"]) == 1:
+            return StreamedAssistantMessage(content=[{"type": "tool_use", "id": "t1", "name": "lookup", "input": {"x": 1}}], stop_reason="tool_use")
+        await on_text("Eighty percent.")
+        return text_message("Eighty percent.")
+
+    async def fake_run_claude_turn(messages, tools, system_prompt, on_text, on_tool_use, cancel_event, **_):
+        env["turns"].append([dict(m) for m in messages])
+        result = await script(messages, on_text, cancel_event)
+        for tu in result.tool_uses:
+            await on_tool_use(tu)                              # the real client reports a tool use as it is assembled, before the turn returns
+        return result
+    monkeypatch.setattr(bridge_module, "run_claude_turn", fake_run_claude_turn)
+    bridge = VoiceBridge(settings(hold_audio=b"H" * 640, hold_text="One moment."), {"lookup": ({"name": "lookup"}, lookup)}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="greeting-1"))
+    await asyncio.sleep(0.05)
+    await say(env, "what does it pay")
+    await until(lambda: env["tts"].finalized)                                 # the answer was generated
+    await env["tts"].queue.put(TTSAudioChunk(synthesis_id="stream-1", pcm16_bytes=b"A" * 640))
+    await until(lambda: sum(len(f) for f in env["call"].played) == 1280, seconds=3)
+    played = b"".join(env["call"].played)
+    assert played == b"H" * 640 + b"A" * 640                                  # the stored phrase first, then the answer, nothing dropped
+    assert [t.role for t in bridge.transcript] == ["assistant", "user", "assistant", "assistant", "tool_result", "assistant"]
+    assert bridge.transcript[2].text == "One moment."
+    assert calls == [{"x": 1}]
+    env["call"].incoming.put_nowait(END)
+    await task
+
+
+async def test_no_one_moment_when_the_model_has_already_started_speaking(env, monkeypatch):
+    async def lookup(arguments):
+        return {}
+
+    async def fake_run_claude_turn(messages, tools, system_prompt, on_text, on_tool_use, cancel_event, **_):
+        env["turns"].append(1)
+        if len(env["turns"]) == 1:
+            await on_text("Let me check. ")                    # it speaks first, then asks for the lookup
+            tu = ToolUseCall(id="t1", name="lookup", input={})
+            await on_tool_use(tu)
+            return StreamedAssistantMessage(content=[{"type": "text", "text": "Let me check. "}, {"type": "tool_use", "id": "t1", "name": "lookup", "input": {}}], stop_reason="tool_use")
+        await on_text("Done.")
+        return text_message("Done.")
+    monkeypatch.setattr(bridge_module, "run_claude_turn", fake_run_claude_turn)
+    bridge = VoiceBridge(settings(hold_audio=b"H" * 640, hold_text="One moment."), {"lookup": ({"name": "lookup"}, lookup)}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="greeting-1"))
+    await asyncio.sleep(0.05)
+    await say(env, "hello")
+    await until(lambda: env["tts"].finalized)
+    assert "One moment." not in [t.text for t in bridge.transcript]
+    env["call"].incoming.put_nowait(END)
+    await task
+
+
+async def test_how_long_each_reply_took_to_begin_is_measured(env, monkeypatch):
+    async def script(messages, on_text, cancel):
+        await asyncio.sleep(0.15)                              # the model takes a moment
+        await on_text("Hello.")
+        return text_message("Hello.")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="greeting-1"))
+    await asyncio.sleep(0.05)
+    await say(env, "hi")
+    await until(lambda: env["tts"].chunks)
+    await env["tts"].queue.put(TTSAudioChunk(synthesis_id="stream-1", pcm16_bytes=b"x" * 320))
+    await until(lambda: bridge.reply_latencies_ms)
+    assert 140 <= bridge.reply_latencies_ms[0] < 1000
+    assert len(bridge.reply_latencies_ms) == 1                 # the greeting is not a reply, and later audio of the same reply is not counted again
     env["call"].incoming.put_nowait(END)
     await task
