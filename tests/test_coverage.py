@@ -28,7 +28,7 @@ def test_the_member_number_is_compared_the_way_a_payer_does(fixture):
 def test_a_name_and_date_of_birth_are_enough_without_a_member_number(fixture):
     for name in ("Pat Sample", "sample, pat", "PAT  SAMPLE"):
         assert fixture.lookup(patient_name=name, date_of_birth="1985-03-14")["verified"], name
-    assert not fixture.lookup(patient_name="Pat Sample", date_of_birth="1985-03-15")["verified"]
+    assert fixture.lookup(patient_name="Pat Sample", date_of_birth="1985-03-15")["member"]["last_name"] == "Sample"      # another Pat Sample: a different, ordinary member
 
 
 def test_the_date_of_birth_is_always_needed_and_what_else_was_given_must_agree(fixture):
@@ -39,11 +39,21 @@ def test_the_date_of_birth_is_always_needed_and_what_else_was_given_must_agree(f
     assert fixture.lookup(member_id="M100001", date_of_birth="1985-03-14", patient_name="Pat Sample", group_number="g10001")["verified"]
 
 
-def test_a_wrong_detail_an_unknown_member_and_blanks_get_the_same_answer_and_nothing_leaks(fixture):
-    same_input = [fixture.lookup(member_id="M100001", date_of_birth="1985-03-15"), fixture.lookup(member_id="M999999", date_of_birth="1985-03-15")]
+def test_a_wrong_detail_on_a_known_member_number_and_blanks_get_the_same_answer_and_nothing_leaks(fixture):
+    same_input = [fixture.lookup(member_id="M100001", date_of_birth="1985-03-15"), fixture.lookup(member_id="M100001", date_of_birth="1985-03-16")]
     assert same_input[0] == same_input[1]                                                           # which detail was wrong is never said
-    for answer in same_input + [fixture.lookup(), fixture.lookup(member_id=None, date_of_birth=None)]:
+    for answer in same_input + [fixture.lookup(), fixture.lookup(member_id=None, date_of_birth=None), fixture.lookup(member_id="M999999"), fixture.lookup(patient_name="Ann Lee")]:
         assert not answer["verified"] and set(answer) <= {"verified", "message", "still_needed", "required_to_continue"}
+
+
+def test_any_patient_who_is_named_with_a_date_of_birth_is_an_ordinary_active_member(fixture):
+    for given in ({"member_id": "X-42", "date_of_birth": "1972-05-09"}, {"patient_name": "Ann Lee", "date_of_birth": "1972-05-09"},
+                  {"member_id": "ZZ1", "patient_name": "Ann Lee", "date_of_birth": "1972-05-09", "group_number": "NOT-A-GROUP"}):
+        result = fixture.lookup(**given)
+        assert result["verified"] and result["eligibility"]["status"] == "active" and result["plan"]["annual_maximum_remaining"] == result["plan"]["annual_maximum"], given
+        assert result == fixture.lookup(**given)                                                    # the same answer every time
+    assert not fixture.lookup(member_id="X-42", date_of_birth="not a date")["verified"]
+    assert fixture.lookup(patient_name="Ann Lee", date_of_birth="1972-05-09", group_number="G10001")["plan"]["name"] == "Acme Gold Dental"
 
 
 def test_the_same_question_twice_gives_the_same_answer(fixture):

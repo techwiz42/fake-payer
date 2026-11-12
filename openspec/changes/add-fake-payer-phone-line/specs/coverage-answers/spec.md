@@ -16,6 +16,9 @@ Every statement the line makes about a member's eligibility, plan, deductible, a
 - **WHEN** the caller asks about a member or procedure code the fixture does not contain
 - **THEN** the line says it cannot find it, and does not guess
 
+### Requirement: Any named patient is a member
+Because the line stands in for whichever insurer a platform under test calls, it SHALL accept any patient the caller names (a member number or a name, with a date of birth) as an ordinary active member of the group's plan (the first plan when the group is not one of the fixture's), with nothing used yet. Only a member number that belongs to a fixture member, given with details that disagree, SHALL be refused, so the fixture's scenario members stay testable. A caller who has not said who the patient is SHALL NOT be verified.
+
 ### Requirement: Identifying the member
 Before giving member-specific answers the line SHALL identify the member from a member number or the patient's name, together with the patient's date of birth. Whatever else the caller gives (the name with a member number, the group number) SHALL agree with the member, or the member is not verified. The practice's and the provider's NPI and the last digits of the practice's tax ID SHALL be accepted but SHALL NOT affect whether the member is verified.
 

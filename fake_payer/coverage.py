@@ -119,6 +119,25 @@ class Fixture:
             return None
         return candidate
 
+    def _accept_unknown(self, member_id: Any, date_of_birth: Any, patient_name: Any, group_number: Any) -> Optional[Dict[str, Any]]:
+        """Any patient the caller names is a member: an ordinary active one on the group's plan (the first plan when the group is not one of ours), nothing used yet. Only a
+        member number that belongs to a fixture member, given with details that do not agree, is still refused; so is a caller who has not said who the patient is."""
+        if _id(member_id) and any(_id(key) == _id(member_id) for key in self.members):
+            return None
+        dob = str(date_of_birth or "").strip()
+        tokens = re.findall(r"[a-z]+", str(patient_name or "").lower())
+        if not dob or not (_id(member_id) or tokens):
+            return None
+        try:
+            _date(dob, "date_of_birth")
+        except FixtureError:
+            return None
+        group = next((g for key, g in self.groups.items() if _id(key) == _id(group_number)), None) if _id(group_number) else None
+        plan_key = group["plan"] if group is not None else next(iter(self.plans))
+        names = str(patient_name or "").split()
+        return {"first_name": names[0] if names else "", "last_name": names[-1] if len(names) > 1 else "", "date_of_birth": dob, "plan": plan_key,
+                "group_number": group_number or "", "status": "active", "effective_date": "2025-01-01", "annual_maximum_used": 0, "deductible_met": 0, "used": {}}
+
     # ---- the lookup -----------------------------------------------------------
 
     def lookup(self, member_id: Optional[str] = None, date_of_birth: Optional[str] = None, patient_name: Optional[str] = None, group_number: Optional[str] = None,
@@ -136,6 +155,8 @@ class Fixture:
             out["notes"] = notes
 
         member = self._find_member(member_id, date_of_birth, patient_name, group_number)
+        if member is None:
+            member = self._accept_unknown(member_id, date_of_birth, patient_name, group_number)
         if member is None:
             out.update(verified=False, message=UNVERIFIED_MESSAGE)
             group = next((g for key, g in self.groups.items() if _id(key) == _id(group_number)), None) if _id(group_number) else None
