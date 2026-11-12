@@ -29,6 +29,10 @@ class Config:
     log_retention_days: int = 7
     call_log_dir: str = "calls"
     tts_voice: str = "Mark"
+    stt_model: str = "stt-rt-preview"
+    listen_host: str = "127.0.0.1"
+    port: int = 8080
+    tts_model: str = "tts-rt-v1"
 
     def __repr__(self) -> str:
         shown = {f.name: ("<set>" if f.name in _SECRETS else getattr(self, f.name)) for f in fields(self)}
@@ -66,4 +70,8 @@ class Config:
             log_retention_days=number("LOG_RETENTION_DAYS", 7, int),
             call_log_dir=(env.get("CALL_LOG_DIR") or "calls").strip(),
             tts_voice=(env.get("TTS_VOICE") or "Mark").strip(),
+            stt_model=(env.get("SONIOX_STT_MODEL") or "stt-rt-preview").strip(),
+            listen_host=(env.get("LISTEN_HOST") or "127.0.0.1").strip(),
+            port=number("PORT", 8080, int),
+            tts_model=(env.get("SONIOX_TTS_MODEL") or "tts-rt-v1").strip(),
         )

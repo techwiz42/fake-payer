@@ -1,0 +1,533 @@
+# Copied from agent_framework b227c23b: modules/communication/backend/soniox_stitched_bridge.py
+# Changes: the privacy-redaction step and the placeholder helpers, the tenant and practice configuration, call persistence, the payer-call control, the language hints
+# and the platform's tool dispatcher are removed. The call's audio goes through a small CallSocket (below) where the original took the web framework's websocket, so the
+# server that carries it can be any. Tools are a name -> (definition, async function) mapping run in this file. The turn state machine, barge-in, streaming reply into
+# speech, the greeting and the call-length watchdog are as they were.
+"""
+Voice bridge: one phone call, three legs.
+
+    Vonage audio (PCM16 8 kHz) <-> bridge <-> Soniox speech-to-text (PCM16 8 kHz)
+                                          <-> Claude streaming (with tools)
+                                          <-> Soniox text-to-speech (PCM16 8 kHz)
+
+Vonage delivers linear 16-bit PCM at 8 kHz (see soniox_ncco.CONTENT_TYPE) and Soniox speaks the same format, so audio passes through untouched.
+
+The bridge:
+  - sends the caller's audio to speech-to-text and turns its endpointing into turns;
+  - on end of the caller's turn, streams the text into Claude, runs any tool it asks for, and feeds the result back;
+  - streams Claude's words into text-to-speech and plays the audio to the caller;
+  - on new caller speech while it is speaking, cancels speech and the model (barge-in);
+  - hangs up when the call reaches its maximum length (watchdog).
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Protocol, Tuple
+
+from .anthropic_streaming_client import StreamedAssistantMessage, ToolUseCall, run_claude_turn
+from .soniox_streaming_client import (
+    SonioxSTTClient,
+    SonioxTTSClient,
+    STTError,
+    STTFinalTranscript,
+    STTPartialTranscript,
+    STTSpeechEnded,
+    STTSpeechStarted,
+    TTSAudioChunk,
+    TTSError,
+    TTSSynthesisComplete,
+)
+
+logger = logging.getLogger(__name__)
+
+ToolFunction = Callable[[Dict[str, Any]], Awaitable[Any]]
+
+
+class CallSocket(Protocol):
+    """The call's audio as the bridge sees it. Whatever carries the Vonage websocket provides these three."""
+
+    async def receive_audio(self) -> Optional[bytes]:
+        """The next block of the caller's audio, or None when the caller has gone. Control messages that carry no audio are skipped inside."""
+
+    async def send_audio(self, data: bytes) -> None:
+        """Play audio to the caller."""
+
+    async def close(self) -> None:
+        """Hang up."""
+
+
+class BridgeState(str, Enum):
+    CONNECTING = "connecting"
+    LISTENING = "listening"            # waiting for caller speech
+    CALLER_SPEAKING = "caller_speaking"
+    THINKING = "thinking"              # Claude turn in progress
+    AGENT_SPEAKING = "agent_speaking"  # TTS audio being played to caller
+    CLOSING = "closing"
+    CLOSED = "closed"
+
+
+@dataclass
+class BridgeSettings:
+    call_uuid: str
+    greeting: str                       # the words spoken first, before the caller says anything
+    soniox_api_key: str
+    stt_model: str = "stt-rt-preview"
+    tts_model: str = "tts-rt-v1"
+    tts_voice: str = "Mark"
+    max_call_seconds: int = 300
+    language: str = "en"
+
+
+@dataclass
+class TurnRecord:
+    """One round-trip in the call's transcript history."""
+    role: str  # "user" | "assistant" | "tool_result"
+    text: str
+    tool_uses: List[Dict[str, Any]] = field(default_factory=list)
+    at_s: float = field(default_factory=time.monotonic)
+
+
+class VoiceBridge:
+    """Three-leg voice bridge orchestrator.
+
+    Lifetime: one instance per call. Not reusable across calls.
+    """
+
+    def __init__(self, settings: BridgeSettings, tools: Dict[str, Tuple[Dict[str, Any], ToolFunction]], system_prompt: str):
+        self._cfg = settings
+        self._tools = tools
+        self._tool_defs_anthropic = [definition for (definition, _function) in tools.values()]
+        self._system_prompt = system_prompt
+
+        self._stt: Optional[SonioxSTTClient] = None
+        self._tts: Optional[SonioxTTSClient] = None
+
+        # Conversation history in Anthropic messages format.
+        self._messages: List[Dict[str, Any]] = []
+        # Human-readable transcript.
+        self._transcript: List[TurnRecord] = []
+
+        # Current turn's buffering.
+        self._pending_user_text: List[str] = []
+        self._caller_language: Optional[str] = None  # last language Soniox identified in the caller's speech
+        self._state = BridgeState.CONNECTING
+        self._started_at = time.monotonic()
+
+        # Barge-in + cancellation state.
+        self._claude_cancel: Optional[asyncio.Event] = None
+        self._active_tts_synthesis_id: Optional[str] = None
+
+        # Terminal outcome (stamped at close time).
+        self._failure_reason: Optional[str] = None
+        self._terminated_by: Optional[str] = None  # "caller" | "watchdog" | "error"
+
+        # Strong references to fire-and-forget background tasks (e.g. the turn-advance task spawned from the STT event loop). Without this, the task can be
+        # garbage-collected mid-flight, and any exception raised inside it is silently swallowed by asyncio's default handler instead of failing the call visibly.
+        self._background_tasks: set = set()
+
+    async def _record_spoken_greeting(self, greeting: str) -> None:
+        """Put the opening line the caller heard into the model's conversation, as its own first turn.
+
+        The greeting goes straight to TTS and never passes through the model, so without this the model does not know what it said: it re-asked a question the
+        greeting had asked, greeted twice, and told the caller it "had no record" of giving its name. Claude's API needs the first message to come from the user,
+        hence the marker turn. Also stored in the transcript, which would otherwise begin after the greeting.
+        """
+        self._messages.append({"role": "user", "content": "[The call has connected. You speak first.]"})
+        self._messages.append({"role": "assistant", "content": greeting})
+        self._transcript.append(TurnRecord(role="assistant", text=greeting))
+
+    # ---- public entrypoint -----------------------------------------------
+
+    async def run(self, call: CallSocket) -> None:
+        """Main orchestration entrypoint. Returns when the call ends."""
+        logger.info("bridge_start call=%s lang=%s", self._cfg.call_uuid, self._cfg.language)
+        try:
+            try:
+                await self._connect_legs()
+            except Exception as e:
+                logger.warning("bridge _connect_legs failed for call=%s: %r", self._cfg.call_uuid, e)
+                self._terminated_by = "error"
+                self._failure_reason = self._failure_reason or f"connect_legs: {e}"
+                raise
+            self._state = BridgeState.LISTENING
+
+            # Initial greeting. The bridge is otherwise purely reactive: it waits for STT speech-ended before doing anything. Without a proactive greeting the
+            # caller hears silence and hangs up (observed: 36 s -> caller-terminated, 0 turns).
+            try:
+                greeting = self._cfg.greeting
+                assert self._tts is not None
+                self._active_tts_synthesis_id = await self._tts.synthesize(greeting)
+                self._state = BridgeState.AGENT_SPEAKING
+                logger.info("bridge initial greeting queued (call=%s synth_id=%s)", self._cfg.call_uuid, self._active_tts_synthesis_id)
+            except Exception as e:
+                logger.warning("bridge initial greeting failed (call=%s): %r", self._cfg.call_uuid, e)
+            else:
+                await self._record_spoken_greeting(greeting)
+
+            # Four concurrent tasks:
+            #   1) caller audio -> STT
+            #   2) STT events -> turn state machine
+            #   3) TTS events -> caller audio (and state)
+            #   4) Watchdog: enforce the maximum call length
+            audio_in = asyncio.create_task(self._audio_to_stt(call))
+            stt_loop = asyncio.create_task(self._stt_event_loop(call))
+            tts_loop = asyncio.create_task(self._tts_event_loop(call))
+            watchdog = asyncio.create_task(self._watchdog(call))
+
+            done, pending = await asyncio.wait([audio_in, stt_loop, tts_loop, watchdog], return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+            for t in pending:
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):
+                    pass
+            # Surface any exception from the first-completed task for logs.
+            for t in done:
+                exc = t.exception()
+                if exc and not isinstance(exc, asyncio.CancelledError):
+                    logger.exception("Bridge task failed: %s", exc)
+                    self._terminated_by = self._terminated_by or "error"
+
+        finally:
+            self._state = BridgeState.CLOSING
+            await self._teardown()
+            self._state = BridgeState.CLOSED
+            logger.info(
+                "bridge_end call=%s duration_s=%d terminated_by=%s turns=%d failure=%s",
+                self._cfg.call_uuid, int(self.duration_seconds), self._terminated_by, len(self._transcript), self._failure_reason,
+            )
+
+    # ---- connection / teardown -------------------------------------------
+
+    async def _connect_legs(self) -> None:
+        if not self._cfg.soniox_api_key:
+            raise RuntimeError("Soniox API key is not configured")
+        self._stt = SonioxSTTClient(api_key=self._cfg.soniox_api_key, model=self._cfg.stt_model, language=self._cfg.language, sample_rate=8000)
+        self._tts = SonioxTTSClient(api_key=self._cfg.soniox_api_key, voice=self._cfg.tts_voice, model=self._cfg.tts_model, sample_rate=8000)
+        logger.info("bridge connecting legs (call=%s stt_model=%s tts_model=%s voice=%s)", self._cfg.call_uuid, self._cfg.stt_model, self._cfg.tts_model, self._cfg.tts_voice)
+        await asyncio.gather(self._stt.connect(), self._tts.connect())
+        logger.info("bridge connected (call=%s)", self._cfg.call_uuid)
+
+    async def _teardown(self) -> None:
+        if self._claude_cancel is not None:
+            self._claude_cancel.set()
+        if self._stt is not None:
+            try:
+                await self._stt.close()
+            except Exception as exc:
+                logger.debug("STT close during teardown failed (best-effort): %s", exc)
+        if self._tts is not None:
+            try:
+                await self._tts.close()
+            except Exception as exc:
+                logger.debug("TTS close during teardown failed (best-effort): %s", exc)
+
+    # ---- inbound: caller audio -> STT ------------------------------------
+
+    async def _audio_to_stt(self, call: CallSocket) -> None:
+        """Read PCM16 audio from the call and push it to Soniox STT. No transcoding: both sides are PCM16 8 kHz."""
+        assert self._stt is not None
+        frame_count = 0
+        byte_count = 0
+        try:
+            while True:
+                data = await call.receive_audio()
+                if data is None:
+                    logger.info("caller disconnect (call=%s frames=%d bytes=%d)", self._cfg.call_uuid, frame_count, byte_count)
+                    self._terminated_by = self._terminated_by or "caller"
+                    return
+                await self._stt.send_audio(data)
+                frame_count += 1
+                byte_count += len(data)
+                if frame_count == 1:
+                    logger.info("first audio from the caller (call=%s bytes=%d)", self._cfg.call_uuid, len(data))
+        except Exception as e:
+            logger.exception("audio->stt loop failed: %s", e)
+            self._terminated_by = self._terminated_by or "error"
+            raise
+        finally:
+            # Tell STT we're done so it flushes any final transcript.
+            try:
+                await self._stt.finalize()
+            except Exception as exc:
+                logger.debug("STT finalize failed (best-effort): %s", exc)
+
+    # ---- inbound event loop: STT -> turn state machine -------------------
+
+    async def _stt_event_loop(self, call: CallSocket) -> None:
+        assert self._stt is not None
+        async for event in self._stt.events():
+            if isinstance(event, STTSpeechStarted):
+                # Barge-in: if the agent is currently speaking, cancel everything.
+                if self._state in (BridgeState.AGENT_SPEAKING, BridgeState.THINKING):
+                    await self._barge_in()
+                self._state = BridgeState.CALLER_SPEAKING
+
+            elif isinstance(event, STTPartialTranscript):
+                # Length only is ever logged: a transcript is the caller's own words.
+                # Partial transcripts may also indicate barge-in mid-response.
+                if self._state == BridgeState.AGENT_SPEAKING and event.text:
+                    await self._barge_in()
+                    self._state = BridgeState.CALLER_SPEAKING
+
+            elif isinstance(event, STTFinalTranscript):
+                self._pending_user_text.append(event.segment)
+                if event.language:
+                    self._caller_language = event.language
+
+            elif isinstance(event, STTSpeechEnded):
+                if self._pending_user_text:
+                    user_text = "".join(self._pending_user_text).strip()
+                    self._pending_user_text.clear()
+                    # Advance a turn.
+                    self._state = BridgeState.THINKING
+                    self._schedule_advance_turn(user_text)
+
+            elif isinstance(event, STTError):
+                logger.warning("STT error: %s (fatal=%s)", event.message, event.fatal)
+                if event.fatal:
+                    self._terminated_by = self._terminated_by or "error"
+                    return
+
+    # ---- outbound event loop: TTS -> caller ------------------------------
+
+    async def _tts_event_loop(self, call: CallSocket) -> None:
+        assert self._tts is not None
+        async for event in self._tts.events():
+            if isinstance(event, TTSAudioChunk):
+                # Drop frames from a superseded (canceled) synthesis: simple, deterministic barge-in semantics.
+                if event.synthesis_id != self._active_tts_synthesis_id:
+                    continue
+                try:
+                    await call.send_audio(event.pcm16_bytes)
+                except Exception as e:
+                    logger.info("send to the caller failed (call=%s err=%r)", self._cfg.call_uuid, e)
+                    self._terminated_by = self._terminated_by or "caller"
+                    return
+            elif isinstance(event, TTSSynthesisComplete):
+                if event.synthesis_id == self._active_tts_synthesis_id:
+                    self._state = BridgeState.LISTENING
+            elif isinstance(event, TTSError):
+                logger.warning("TTS error: %s (fatal=%s)", event.message, event.fatal)
+                if event.fatal:
+                    self._terminated_by = self._terminated_by or "error"
+                    return
+
+    # ---- barge-in fanout --------------------------------------------------
+
+    async def _barge_in(self) -> None:
+        """Cancel in-flight Claude + TTS atomically; reset state to listening."""
+        logger.info("barge_in: canceling agent response (call=%s)", self._cfg.call_uuid)
+        if self._claude_cancel is not None:
+            self._claude_cancel.set()
+        # Invalidate the current synthesis so any already-buffered chunks are dropped.
+        self._active_tts_synthesis_id = None
+        if self._tts is not None:
+            try:
+                await self._tts.cancel()
+            except Exception as e:
+                logger.debug("tts.cancel() error (ignored): %s", e)
+        self._state = BridgeState.LISTENING
+
+    # ---- turn advancement ------------------------------------------------
+
+    def _schedule_advance_turn(self, user_text: str) -> None:
+        """Fire-and-forget `_advance_turn`, but retain the task reference and observe its outcome.
+
+        `_advance_turn` is launched from the synchronous STT event loop via `asyncio.create_task`, so nothing normally awaits it. If the bare task object is
+        discarded, (a) it can be garbage-collected mid-flight (asyncio only holds a weak reference), and (b) any exception raised inside it is reported to
+        asyncio's default exception handler instead of this module's logger, and `self._state` is left stuck at THINKING (set just before this call), hanging the
+        live call forever waiting for a turn that will never complete.
+        """
+        task = asyncio.create_task(self._advance_turn(user_text))
+        self._background_tasks.add(task)
+
+        def _on_done(t: "asyncio.Task") -> None:
+            self._background_tasks.discard(t)
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc is not None:
+                logger.error("_advance_turn failed for call=%s (state stuck at %s): %s", self._cfg.call_uuid, self._state, exc, exc_info=exc)
+                self._terminated_by = self._terminated_by or "error"
+                self._failure_reason = self._failure_reason or f"advance_turn: {exc}"
+                # Unstick the state machine so the caller isn't left hanging in THINKING with no turn ever able to complete.
+                if self._state == BridgeState.THINKING:
+                    self._state = BridgeState.LISTENING
+
+        task.add_done_callback(_on_done)
+
+    async def _advance_turn(self, user_text: str) -> None:
+        """Run one Claude turn: stream text to TTS, run tools, loop until no tool_use."""
+        if not user_text:
+            self._state = BridgeState.LISTENING
+            return
+
+        self._transcript.append(TurnRecord(role="user", text=user_text))
+        self._messages.append({"role": "user", "content": user_text})
+
+        # Start a fresh cancel event scoped to this turn.
+        self._claude_cancel = asyncio.Event()
+
+        # Loop: keep running Claude turns while the model returns tool_use blocks.
+        while True:
+            assistant = await self._run_one_claude_turn()
+            if assistant is None:
+                # Canceled by barge-in.
+                return
+
+            # Append assistant message to history (only if not canceled).
+            self._messages.append({"role": "assistant", "content": assistant.content})
+            self._transcript.append(TurnRecord(
+                role="assistant",
+                text=assistant.text,
+                tool_uses=[{"name": tu.name, "input": tu.input} for tu in assistant.tool_uses],
+            ))
+
+            tool_uses = assistant.tool_uses
+            if not tool_uses:
+                # End of turn; hand control back to listening.
+                self._state = BridgeState.LISTENING
+                return
+
+            # Run each tool_use and build the follow-up user message.
+            tool_result_blocks: List[Dict[str, Any]] = []
+            for tu in tool_uses:
+                block = await self._run_tool(tu)
+                tool_result_blocks.append(block)
+                self._transcript.append(TurnRecord(
+                    role="tool_result",
+                    text=str(block.get("content", ""))[:500],
+                    tool_uses=[{"name": tu.name, "tool_use_id": tu.id}],
+                ))
+            self._messages.append({"role": "user", "content": tool_result_blocks})
+
+            # If barge-in happened while a tool ran, stop the loop.
+            if self._claude_cancel is not None and self._claude_cancel.is_set():
+                return
+
+    async def _run_tool(self, call: ToolUseCall) -> Dict[str, Any]:
+        """Run one tool the model asked for and return its tool_result block. An unknown tool or a failing one is reported to the model, not raised: the call goes on."""
+        entry = self._tools.get(call.name)
+        if entry is None:
+            return {"type": "tool_result", "tool_use_id": call.id, "content": json.dumps({"error": f"unknown tool {call.name}"}), "is_error": True}
+        try:
+            result = await entry[1](call.input)
+        except Exception as exc:
+            logger.warning("tool %s failed (call=%s): %r", call.name, self._cfg.call_uuid, exc)
+            return {"type": "tool_result", "tool_use_id": call.id, "content": json.dumps({"error": "the lookup failed"}), "is_error": True}
+        content = result if isinstance(result, str) else json.dumps(result, default=str)
+        return {"type": "tool_result", "tool_use_id": call.id, "content": content}
+
+    async def _run_one_claude_turn(self) -> Optional[StreamedAssistantMessage]:
+        """Execute one Claude streaming call; stream text to TTS as it arrives.
+
+        One TTS stream per assistant turn. Every text delta from Claude is appended to the SAME Soniox stream via `send_text_chunk()`, and the stream is
+        finalized at turn end. This preserves streaming-TTS latency (Soniox emits audio as soon as it has enough text) while respecting Soniox's "one active
+        stream per socket" rule: opening a new stream per clause (the old behavior) caused overlapping streams to interleave audio and produced mid-word artifacts.
+        """
+        assert self._tts is not None
+        self._state = BridgeState.THINKING
+
+        # Lazy: only open a stream if Claude actually emits text this turn. Tool-only turns produce no audio; don't burn a config roundtrip.
+        turn_synthesis_id: Optional[str] = None
+
+        async def send_speech(text: str) -> None:
+            nonlocal turn_synthesis_id
+            if turn_synthesis_id is None:
+                # First text of the turn -- open the stream now. Speak in the language the caller is speaking (None until one has been identified: the voice's
+                # own default).
+                turn_synthesis_id = await self._tts.begin_stream(language=self._caller_language)
+                self._active_tts_synthesis_id = turn_synthesis_id
+                self._state = BridgeState.AGENT_SPEAKING
+            try:
+                await self._tts.send_text_chunk(text, turn_synthesis_id)
+            except Exception as e:
+                logger.warning("TTS send_text_chunk failed mid-turn: %s", e)
+
+        async def on_text(chunk: str) -> None:
+            if chunk:
+                await send_speech(chunk)
+
+        async def on_tool_use(call: ToolUseCall) -> None:
+            # Tools are run centrally in _advance_turn; this callback is just a hook for metrics / tracing if needed.
+            logger.debug("Claude requested tool: %s", call.name)
+
+        try:
+            assistant = await run_claude_turn(
+                messages=self._messages,
+                tools=self._tool_defs_anthropic,
+                system_prompt=self._system_prompt,
+                on_text=on_text,
+                on_tool_use=on_tool_use,
+                cancel_event=self._claude_cancel,
+            )
+        except Exception as e:
+            logger.exception("Claude turn failed: %s", e)
+            self._terminated_by = self._terminated_by or "error"
+            # Best-effort: close the dangling stream so the socket stays tidy.
+            if turn_synthesis_id is not None:
+                try:
+                    await self._tts.finalize_stream(turn_synthesis_id)
+                except Exception as exc:
+                    logger.debug("TTS stream finalize failed (best-effort): %s", exc)
+            return None
+
+        # If canceled (barge-in), _barge_in() already sent cancel() to Soniox and reset _active_tts_synthesis_id. Don't finalize: cancel+finalize would double up
+        # on the wire, and the server already dropped the stream.
+        if self._claude_cancel is not None and self._claude_cancel.is_set():
+            return None
+
+        # Finalize the stream: tells Soniox no more text is coming. The server flushes remaining audio and emits TTSSynthesisComplete, which the TTS event
+        # loop uses to transition back to LISTENING.
+        if turn_synthesis_id is not None:
+            try:
+                await self._tts.finalize_stream(turn_synthesis_id)
+            except Exception as e:
+                logger.warning("TTS finalize_stream failed: %s", e)
+
+        return assistant
+
+    # ---- watchdog --------------------------------------------------------
+
+    async def _watchdog(self, call: CallSocket) -> None:
+        """Hard cap per-call duration. Hangs up when exceeded: a model is not trusted to watch a clock."""
+        deadline = self._started_at + self._cfg.max_call_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.info("Watchdog triggered: call %s exceeded %ds", self._cfg.call_uuid, self._cfg.max_call_seconds)
+                self._terminated_by = "watchdog"
+                await self._hang_up(call)
+                return
+            await asyncio.sleep(min(remaining, 5.0))
+
+    async def _hang_up(self, call: CallSocket) -> None:
+        try:
+            await call.close()
+        except Exception as exc:
+            logger.debug("hang-up failed (best-effort): %s", exc)
+
+    # ---- accessors for the call log --------------------------------------
+
+    @property
+    def transcript(self) -> List[TurnRecord]:
+        return list(self._transcript)
+
+    @property
+    def failure_reason(self) -> Optional[str]:
+        return self._failure_reason
+
+    @property
+    def terminated_by(self) -> Optional[str]:
+        return self._terminated_by
+
+    @property
+    def duration_seconds(self) -> float:
+        return time.monotonic() - self._started_at

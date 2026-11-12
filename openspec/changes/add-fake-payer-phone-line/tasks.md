@@ -8,17 +8,17 @@
 
 ## 2. Bring in the voice code
 
-- [ ] 2.1 Copy `soniox_streaming_client.py` and its tests, with the source header. Verify: its tests pass here.
-- [ ] 2.2 Copy `anthropic_streaming_client.py` and its tests, replacing the platform constants with local configuration. Verify: its tests pass here.
-- [ ] 2.3 Copy `soniox_ncco.py`. Verify: it produces the answer response with the PCM 8 kHz content type, checked by a test.
-- [ ] 2.4 Copy `soniox_stitched_bridge.py` and cut it down: remove redaction, tenant configuration, persistence, payer-call control and placeholder restoring; keep turn taking, barge-in, streaming reply and the watchdog. Verify: a scripted-audio test covers a turn and a barge-in; the file has no import from the platform.
+- [x] 2.1 Copy `soniox_streaming_client.py` and its tests, with the source header. Verify: its tests pass here.
+- [x] 2.2 Copy `anthropic_streaming_client.py` and its tests, replacing the platform constants with local configuration. Verify: its tests pass here.
+- [x] 2.3 Copy `soniox_ncco.py`. Verify: it produces the answer response with the PCM 8 kHz content type, checked by a test.
+- [x] 2.4 Copy `soniox_stitched_bridge.py` and cut it down: remove redaction, tenant configuration, persistence, payer-call control and placeholder restoring; keep turn taking, barge-in, streaming reply and the watchdog. Verify: a scripted-audio test covers a turn and a barge-in; the file has no import from the platform.
 - [ ] 2.5 Text-to-speech voice set to "Mark" from configuration, for every utterance. Verify: a test shows each text-to-speech request, including the disclosure and a refusal, names that voice.
-- [ ] 2.6 Opening line replaced by the fictional provider's disclosure. Verify: a test transcript begins with it.
+- [x] 2.6 Opening line replaced by the fictional provider's disclosure. Verify: a test transcript begins with it.
 
 ## 3. Answering a call
 
-- [ ] 3.1 One small server with the answer request and the audio websocket, and nothing else. Verify: a local simulated Vonage connection gets an answer response and an open audio stream; any other path is refused.
-- [ ] 3.2 Run a call through the bridge end to end with the lookup tool in place of the platform's dispatcher. Verify: a simulated caller asks a coverage question and is answered by speech.
+- [x] 3.1 One small server with the answer request and the audio websocket, and nothing else. Verify: a local simulated Vonage connection gets an answer response and an open audio stream; any other path is refused.
+- [x] 3.2 Run a call through the bridge end to end with the lookup tool in place of the platform's dispatcher. Verify: a simulated caller asks a coverage question and is answered by speech.
 
 ## 4. Coverage answers
 
