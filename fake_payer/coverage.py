@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -58,6 +58,7 @@ class Fixture:
     members: Dict[str, Dict[str, Any]]
     groups: Dict[str, Dict[str, Any]]
     categories: List[str]
+    standing_answers: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: Path = FIXTURE_PATH) -> "Fixture":
@@ -98,7 +99,8 @@ class Fixture:
             for code in (member.get("used") or {}):
                 if code not in procedures:
                     raise FixtureError(f"member {member_id}: used lists unknown code {code}")
-        return cls(plans=plans, procedures=procedures, members=members, groups=groups, categories=categories)
+        return cls(plans=plans, procedures=procedures, members=members, groups=groups, categories=categories,
+                   standing_answers={str(k): str(v) for k, v in (raw.get("standing_answers") or {}).items()})
 
     # ---- finding the member ---------------------------------------------------
 
@@ -147,6 +149,8 @@ class Fixture:
         given = {"member_id": member_id, "date_of_birth": date_of_birth, "patient_name": patient_name, "group_number": group_number,
                  "practice_npi": practice_npi, "provider_npi": provider_npi, "tin_last4": tin_last4}
         out: Dict[str, Any] = {"still_needed": [name for name in ASKED_FOR if not str(given[name] or "").strip()], "required_to_continue": False}
+        if self.standing_answers:
+            out["standing_answers"] = dict(self.standing_answers)
         notes = []
         for name, digits in (("practice_npi", 10), ("provider_npi", 10), ("tin_last4", 4)):
             if str(given[name] or "").strip() and len(_digits(given[name])) != digits:

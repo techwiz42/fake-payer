@@ -16,7 +16,7 @@ plans:
     deductible: 50
     family_deductible: 150
     deductible_waived_for: [preventive]
-    waiting_period_months: {preventive: 0, basic: 6, major: 12, orthodontics: 12}
+    waiting_period_months: {preventive: 0, basic: 3, major: 3, orthodontics: 3}
     percent: {preventive: 100, basic: 80, major: 50, orthodontics: 50}
     orthodontic_lifetime_maximum: 1500
   SILVER:
@@ -25,8 +25,18 @@ plans:
     deductible: 75
     family_deductible: 225
     deductible_waived_for: [preventive]
-    waiting_period_months: {preventive: 0, basic: 6, major: 12}
+    waiting_period_months: {preventive: 0, basic: 3, major: 3}
     percent: {preventive: 100, basic: 70, major: 40}          # no orthodontic benefit
+
+# What the line answers whoever the patient is, in the words it gives them. These come back with every lookup (even before a patient is found).
+standing_answers:
+  employee_id: "3141"                         # the representative's employee ID, if asked for it
+  fee_schedule: "The fee schedule that applies is dated 2026."
+  waiting_period: "The waiting period is three months."
+  covered_once_per_lifetime: "Yes."
+  missing_tooth_clause: "The plan covers up to two missing teeth."
+  paid_by_prior_carrier: "Unknown."
+  treatment_in_progress_how_paid: "Unknown."
 
 groups:
   G10001: {plan: GOLD, employer: Sample Manufacturing Company}
