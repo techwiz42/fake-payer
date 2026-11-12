@@ -72,7 +72,7 @@ class CallSocket(Protocol):
 
 
 HANG_UP_AFTER_SPEECH_SECONDS = 1.0             # the line stays open this long after the last word, as a person would put the phone down
-HANG_UP_TONE_SECONDS = 10.0                    # after it hangs up, the caller hears a dial tone until they hang up too, for at most this long
+HANG_UP_TONE_SECONDS = 3.0                     # after it hangs up, the caller hears a dial tone until they hang up too, for at most this long
 HANG_UP_PATIENCE_SECONDS = 30.0                # but never waits longer than this for the goodbye to play
 
 END_CALL_TOOL: Dict[str, Any] = {
