@@ -51,6 +51,14 @@ def _digits(value: Any) -> str:
     return re.sub(r"\D", "", str(value or ""))
 
 
+_FILLER = frozenset("the a an of to is are does do it for on in and or be by how what which who this that with at as if any".split())
+
+
+def _stems(value: Any) -> frozenset:
+    """The words of a question without the small ones, each reduced to a stem (a trailing s dropped) so that "sealants" meets "sealant"."""
+    return frozenset(w[:-1] if len(w) > 3 and w.endswith("s") else w for w in re.findall(r"[a-z0-9]+", str(value or "").lower()) if w not in _FILLER)
+
+
 @dataclass(frozen=True)
 class Fixture:
     plans: Dict[str, Dict[str, Any]]
@@ -59,6 +67,7 @@ class Fixture:
     groups: Dict[str, Dict[str, Any]]
     categories: List[str]
     standing_answers: Dict[str, str] = field(default_factory=dict)
+    benefit_answers: List[Dict[str, str]] = field(default_factory=list)       # [{question, answer}]: what the line says to each question of a practice's verification form
 
     @classmethod
     def load(cls, path: Path = FIXTURE_PATH) -> "Fixture":
@@ -100,7 +109,21 @@ class Fixture:
                 if code not in procedures:
                     raise FixtureError(f"member {member_id}: used lists unknown code {code}")
         return cls(plans=plans, procedures=procedures, members=members, groups=groups, categories=categories,
-                   standing_answers={str(k): str(v) for k, v in (raw.get("standing_answers") or {}).items()})
+                   standing_answers={str(k): str(v) for k, v in (raw.get("standing_answers") or {}).items()},
+                   benefit_answers=[{"question": str(e["question"]), "answer": str(e["answer"])} for e in (raw.get("benefit_answers") or [])])
+
+    # ---- the form's questions -------------------------------------------------
+
+    def answer_questions(self, question: Any, limit: int = 3) -> List[Dict[str, str]]:
+        """The entries whose question is closest to what was asked: the most words in common (a word and its plural count as one), best first. Nothing in common, nothing back."""
+        wanted = _stems(question)
+        scored = []
+        for entry in self.benefit_answers:
+            common = wanted & _stems(entry["question"] + " " + entry["answer"])
+            if common:
+                scored.append((len(common & _stems(entry["question"])) * 2 + len(common), entry))
+        scored.sort(key=lambda pair: -pair[0])
+        return [entry for _score, entry in scored[:limit]]
 
     # ---- finding the member ---------------------------------------------------
 
@@ -279,6 +302,17 @@ TOOL_DEFINITION: Dict[str, Any] = {
 }
 
 
+ANSWER_TOOL_DEFINITION: Dict[str, Any] = {
+    "name": "lookup_benefit_answer",
+    "description": (
+        "Find the line's answer to a question about the plan that is not a simple coverage lookup: waiting periods, frequency and age limits, replacement and downgrade rules, "
+        "how orthodontics is paid, history on file (last exam, last x-rays), network and claim-filing questions, and so on. Pass the caller's question in their words. It returns up to "
+        "three entries, each a question and the answer to give; use the one that matches what was asked, and say its answer in your own spoken words. If nothing comes back, say you "
+        "do not have that information. Every such fact you state must come from this tool or from lookup_coverage."),
+    "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The caller's question, in their words."}}, "required": ["question"]},
+}
+
+
 def make_tools(fixture: Fixture) -> Dict[str, Any]:
     """The tool mapping the bridge runs: name -> (definition, async function)."""
 
@@ -286,4 +320,11 @@ def make_tools(fixture: Fixture) -> Dict[str, Any]:
         wanted = {name: arguments.get(name) for name in (*ASKED_FOR, "procedure_code")}
         return fixture.lookup(**wanted)
 
-    return {TOOL_DEFINITION["name"]: (TOOL_DEFINITION, lookup_coverage)}
+    async def lookup_benefit_answer(arguments: Dict[str, Any]) -> Dict[str, Any]:
+        found = fixture.answer_questions(arguments.get("question"))
+        return {"entries": found} if found else {"entries": [], "note": "no information on file for that"}
+
+    tools = {TOOL_DEFINITION["name"]: (TOOL_DEFINITION, lookup_coverage)}
+    if fixture.benefit_answers:
+        tools[ANSWER_TOOL_DEFINITION["name"]] = (ANSWER_TOOL_DEFINITION, lookup_benefit_answer)
+    return tools

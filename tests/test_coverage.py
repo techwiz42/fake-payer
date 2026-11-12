@@ -174,3 +174,34 @@ def test_the_standing_answers_come_back_with_every_lookup_even_before_a_patient_
                 "paid_by_prior_carrier": "Unknown.", "treatment_in_progress_how_paid": "Unknown."}
     assert fixture.lookup()["standing_answers"] == expected
     assert fixture.lookup(member_id="M100001", date_of_birth="1985-03-14")["standing_answers"] == expected
+
+
+# ---- the form's questions ---------------------------------------------------------------------------------------------------
+
+def test_every_question_of_a_practices_verification_form_has_an_answer(fixture):
+    import importlib.util
+    path = "/Users/bartelby/af-payer-call/modules/insurance/backend/sub_services/benefit_catalog_data.py"
+    if not __import__("os").path.exists(path):
+        pytest.skip("the platform's catalog is not alongside")
+    spec = importlib.util.spec_from_file_location("catalog", path)
+    catalog = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(catalog)
+    asked = {e["question"] for e in fixture.benefit_answers}
+    missing = [row["key"] for row in catalog.CATALOG if row["group"] != "office" and row["label"] not in asked]
+    assert not missing, missing
+
+
+@pytest.mark.parametrize("question, expected", [
+    ("What is the waiting period for orthodontics?", "waiting period for orthodontics is twelve months"),
+    ("is there a missing tooth clause for ortho", "up to two missing teeth"),
+    ("how often are bitewings covered", "Bitewings are covered once per calendar year"),
+    ("what age do sealants go to", "Sealants are covered up to age fourteen"),
+    ("when was the last exam", "May 14, 2026"),
+    ("is the deductible waived for preventive care", "waived for preventive"),
+])
+def test_a_question_in_the_callers_words_finds_its_entry(fixture, question, expected):
+    assert expected in fixture.answer_questions(question)[0]["answer"]
+
+
+def test_a_question_with_nothing_in_common_gets_nothing(fixture):
+    assert fixture.answer_questions("what is the capital of France") == []

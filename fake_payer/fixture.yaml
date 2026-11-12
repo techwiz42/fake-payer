@@ -109,3 +109,135 @@ members:
     deductible_met: 75
     used: {D2740: 0}
     note: Annual maximum nearly used. Only the remainder of the maximum is left for a major procedure.
+
+# Answers to the questions a practice's insurance verification form asks, one entry per question, in the words the line gives them. `question` is the form's wording; the
+# `lookup_benefit_answer` tool finds the entries closest to what the caller asked. Plausible, invented values consistent with the GOLD plan above; nothing here is real.
+benefit_answers:
+  - {question: "Primary or secondary (coordination of benefits, or non-duplicate)", answer: "This is the primary plan."}
+  - {question: "In network?", answer: "Yes, the practice is in network."}
+  - {question: "Effective date", answer: "The coverage became effective January 1, 2025."}
+  - {question: "Fee schedule", answer: "The fee schedule that applies is dated 2026."}
+  - {question: "Do you accept electronic attachments?", answer: "Yes, we accept electronic attachments."}
+  - {question: "Do we submit claims electronically?", answer: "Yes, claims can be submitted electronically."}
+  - {question: "Is it a calendar-year plan?", answer: "Yes, it is a calendar-year plan."}
+  - {question: "If not a calendar-year plan, which plan year?", answer: "Not applicable: it is a calendar-year plan."}
+  - {question: "Are there out-of-network benefits?", answer: "Yes, there are out-of-network benefits."}
+  - {question: "Are they the same as in network?", answer: "Yes, the percentages are the same as in network."}
+  - {question: "If out of network, who does the payment go to?", answer: "Out-of-network payments go to the patient."}
+  - {question: "Out-of-network benefits are based on (flag UCR)", answer: "Out-of-network benefits are based on usual and customary fees."}
+  - {question: "Annual maximum (and how much is used)", answer: "The annual maximum is fifteen hundred dollars, and none of it has been used."}
+  - {question: "Do preventive procedures apply to the maximum?", answer: "Yes, preventive procedures count toward the annual maximum."}
+  - {question: "Deductible (and how much is met)", answer: "The deductible is fifty dollars per person, and none of it has been met."}
+  - {question: "Does the deductible apply to preventive procedures?", answer: "No, the deductible is waived for preventive procedures."}
+  - {question: "Do FMX, periapicals and panoramic apply to the deductible?", answer: "No, x-rays are covered as preventive, so the deductible does not apply."}
+  - {question: "Preventive coverage %", answer: "Preventive care is covered at one hundred percent."}
+  - {question: "Basic coverage %", answer: "Basic procedures are covered at eighty percent."}
+  - {question: "Major coverage %", answer: "Major procedures are covered at fifty percent."}
+  - {question: "Endodontics is paid as", answer: "Endodontics is paid as major."}
+  - {question: "Periodontics is paid as", answer: "Periodontics is paid as basic."}
+  - {question: "Oral surgery is paid as", answer: "Oral surgery is paid as basic."}
+  - {question: "Pediatric crown D2930 coverage %", answer: "A pediatric crown is covered at eighty percent."}
+  - {question: "Pediatric pulpotomy D3220 coverage %", answer: "A pediatric pulpotomy is covered at eighty percent."}
+  - {question: "Comprehensive exam D0150: how often is it covered?", answer: "A comprehensive exam is covered once every three years."}
+  - {question: "Periodic exam D0120: how often is it covered?", answer: "A periodic exam is covered twice per calendar year."}
+  - {question: "Limited exam D0140: coverage %", answer: "A limited exam is covered at one hundred percent."}
+  - {question: "Limited exam D0140: how often is it covered?", answer: "A limited exam is covered twice per calendar year."}
+  - {question: "Does the limited exam share the exam frequency?", answer: "Yes, the limited exam shares the exam frequency."}
+  - {question: "Prophylaxis D1110: how often is it covered?", answer: "A prophylaxis is covered twice per calendar year."}
+  - {question: "Bitewings D0272/D0274: coverage %", answer: "Bitewings are covered at one hundred percent."}
+  - {question: "Bitewings D0272/D0274: how often is it covered?", answer: "Bitewings are covered once per calendar year."}
+  - {question: "Panoramic D0330: coverage %", answer: "A panoramic x-ray is covered at one hundred percent."}
+  - {question: "Panoramic D0330: how often is it covered?", answer: "A panoramic x-ray is covered once every three years."}
+  - {question: "Full-mouth series D0210: coverage %", answer: "A full-mouth series is covered at one hundred percent."}
+  - {question: "Full-mouth series D0210: how often is it covered?", answer: "A full-mouth series is covered once every three years, and it shares that limit with the panoramic."}
+  - {question: "Periapicals D0220/D0230: coverage %", answer: "Periapicals are covered at one hundred percent."}
+  - {question: "Periapicals D0220/D0230: how often is it covered?", answer: "Periapicals are covered as needed for diagnosis."}
+  - {question: "Sealants D1351: coverage %", answer: "Sealants are covered at one hundred percent."}
+  - {question: "Sealants D1351: how often is it covered?", answer: "Sealants are covered once per tooth every three years."}
+  - {question: "Sealants D1351: age limit", answer: "Sealants are covered up to age fourteen."}
+  - {question: "Sealants D1351: replacement rule", answer: "A sealant on the same tooth can be replaced after three years."}
+  - {question: "Fluoride D1208: coverage %", answer: "Fluoride is covered at one hundred percent."}
+  - {question: "Fluoride D1208: how often is it covered?", answer: "Fluoride is covered once per calendar year."}
+  - {question: "Fluoride D1208: age limit", answer: "Fluoride is covered up to age fourteen."}
+  - {question: "Space maintainers D1516/D1517: coverage %", answer: "Space maintainers are covered at one hundred percent."}
+  - {question: "Space maintainers D1516/D1517: how often is it covered?", answer: "Space maintainers are covered once per arch per lifetime."}
+  - {question: "Space maintainers: age limit", answer: "Space maintainers are covered up to age fourteen."}
+  - {question: "Space maintainers: replacement rule", answer: "One replacement is covered if the first is lost, within the age limit."}
+  - {question: "Perio maintenance D4910: coverage %", answer: "Perio maintenance is covered at eighty percent."}
+  - {question: "Perio maintenance D4910: how often is it covered?", answer: "Perio maintenance is covered up to four times per calendar year, combined with prophylaxis."}
+  - {question: "Perio maintenance: in addition to, or combined with, prophylaxis?", answer: "Perio maintenance is combined with prophylaxis, not in addition to it."}
+  - {question: "Perio maintenance: does the deductible apply?", answer: "No, the deductible does not apply to perio maintenance."}
+  - {question: "Perio maintenance: other limitations", answer: "Perio maintenance is covered after scaling and root planing has been completed, and not within three months of it."}
+  - {question: "Scaling and root planing D4341/D4342: coverage %", answer: "Scaling and root planing is covered at eighty percent."}
+  - {question: "Scaling and root planing D4341/D4342: how often is it covered?", answer: "Scaling and root planing is covered once per quadrant every two years."}
+  - {question: "How many quadrants of scaling and root planing can be done per day?", answer: "Up to two quadrants can be done per day."}
+  - {question: "If not all four, how far apart?", answer: "Visits should be at least two weeks apart."}
+  - {question: "Will they pay for a prophylaxis the same day as scaling and root planing?", answer: "No, a prophylaxis on the same day as scaling and root planing is not paid."}
+  - {question: "Scaling with inflammation D4346: coverage %", answer: "Scaling with inflammation is covered at eighty percent."}
+  - {question: "Scaling with inflammation D4346: how often is it covered?", answer: "Scaling with inflammation is covered once per calendar year, in place of a prophylaxis."}
+  - {question: "Scaling with inflammation: in addition to, or combined with, prophylaxis or scaling?", answer: "Scaling with inflammation is combined with prophylaxis."}
+  - {question: "Scaling with inflammation: does the deductible apply?", answer: "No, the deductible does not apply to scaling with inflammation."}
+  - {question: "Debridement D4355: coverage %", answer: "Debridement is covered at eighty percent."}
+  - {question: "Debridement D4355: how often is it covered?", answer: "Debridement is covered once every three years."}
+  - {question: "Debridement: in addition to, or combined with, prophylaxis?", answer: "Debridement is combined with prophylaxis."}
+  - {question: "Debridement: does the deductible apply?", answer: "No, the deductible does not apply to debridement."}
+  - {question: "Build-up D2950: coverage %", answer: "A build-up is covered at fifty percent."}
+  - {question: "Build-up D2950: how often is it covered?", answer: "A build-up is covered once per tooth every five years."}
+  - {question: "Build-up: is it considered inclusive to a crown?", answer: "Yes, a build-up is considered inclusive to a crown."}
+  - {question: "Post and core D2954: coverage %", answer: "A post and core is covered at fifty percent."}
+  - {question: "Post and core D2954: how often is it covered?", answer: "A post and core is covered once per tooth every five years."}
+  - {question: "Post and core: is it considered inclusive to a crown?", answer: "No, a post and core is paid separately when a crown follows a root canal."}
+  - {question: "Desensitizer D9910: coverage %", answer: "A desensitizer is covered at fifty percent."}
+  - {question: "Desensitizer D9910: how often is it covered?", answer: "A desensitizer is covered once per year."}
+  - {question: "Desensitizer: is it paid on the same day as a crown or filling?", answer: "No, a desensitizer is not paid on the same day as a crown or filling."}
+  - {question: "Onlay D6608: coverage %", answer: "An onlay is covered at fifty percent."}
+  - {question: "Onlay D6608: how often is it covered?", answer: "An onlay is covered once per tooth every five years."}
+  - {question: "Implant crown D6058: coverage %", answer: "An implant crown is covered at fifty percent."}
+  - {question: "Implant crown D6058: how often is it covered?", answer: "An implant crown is covered once per tooth every ten years."}
+  - {question: "Complete denture D5110: coverage %", answer: "A complete denture is covered at fifty percent."}
+  - {question: "Complete denture D5110: how often is it covered?", answer: "A complete denture is covered once every five years."}
+  - {question: "Occlusal guard D9944: coverage %", answer: "An occlusal guard is covered at fifty percent."}
+  - {question: "Occlusal guard D9944: how often is it covered?", answer: "An occlusal guard is covered once every three years."}
+  - {question: "Occlusal guard: for bruxism, for osseous surgery, or both?", answer: "An occlusal guard is covered for bruxism."}
+  - {question: "Resins: coverage %", answer: "Resin fillings are covered at eighty percent."}
+  - {question: "Resins: how often is it covered?", answer: "A resin filling is covered once per tooth surface every two years."}
+  - {question: "Are posterior composites downgraded to amalgam?", answer: "Yes, posterior composites are paid at the amalgam rate."}
+  - {question: "Are crowns downgraded?", answer: "No, crowns are not downgraded."}
+  - {question: "Crowns are paid on the prep date or the seat date", answer: "Crowns are paid on the seat date."}
+  - {question: "Crown D2740 coverage %", answer: "A porcelain crown is covered at fifty percent."}
+  - {question: "Crown D2750 coverage %", answer: "A porcelain-fused-to-metal crown is covered at fifty percent."}
+  - {question: "Replacement rule for crowns", answer: "A crown is covered once per tooth every five years."}
+  - {question: "Missing tooth clause", answer: "The plan covers up to two missing teeth."}
+  - {question: "Waiting period for basic procedures (months)", answer: "The waiting period for basic procedures is six months."}
+  - {question: "Waiting period for major procedures (months)", answer: "The waiting period for major procedures is twelve months."}
+  - {question: "Waiting period for orthodontics (months)", answer: "The waiting period for orthodontics is twelve months."}
+  - {question: "Waiting periods (other detail)", answer: "Preventive care has no waiting period. Basic is six months, major is twelve months, and orthodontics is twelve months."}
+  - {question: "Student status requirement", answer: "No, student status is not required."}
+  - {question: "Ortho coverage %", answer: "Orthodontics is covered at fifty percent."}
+  - {question: "Ortho maximum $ (and how much is used)", answer: "The orthodontic lifetime maximum is fifteen hundred dollars, and none of it has been used."}
+  - {question: "Does a deductible apply to orthodontics?", answer: "No, a deductible does not apply to orthodontics."}
+  - {question: "Adult orthodontic coverage?", answer: "Yes, adult orthodontics is covered."}
+  - {question: "Orthodontic coverage to what age?", answer: "There is no age limit for orthodontic coverage."}
+  - {question: "How is orthodontics paid?", answer: "Orthodontics is paid twenty percent of the benefit when the braces are placed, and the rest in equal quarterly payments over the treatment period."}
+  - {question: "Is orthodontic treatment covered once per lifetime?", answer: "Yes, orthodontic treatment is covered once per lifetime."}
+  - {question: "Does a missing-tooth clause apply to orthodontics?", answer: "The plan covers up to two missing teeth."}
+  - {question: "Orthodontic benefit already paid by a prior carrier ($)", answer: "Unknown."}
+  - {question: "Treatment already in progress at the effective date: how is it paid?", answer: "Unknown."}
+  - {question: "Last full-mouth series or panoramic", answer: "The last full-mouth series or panoramic was March 12, 2023."}
+  - {question: "Eligible for a full-mouth series or panoramic now?", answer: "Yes, the patient is eligible for a full-mouth series or panoramic now."}
+  - {question: "Last exam", answer: "The last exam was May 14, 2026."}
+  - {question: "Last bitewings", answer: "The last bitewings were May 14, 2026."}
+  - {question: "Last limited exam", answer: "There is no limited exam on record."}
+  - {question: "Last fluoride", answer: "There is no fluoride on record."}
+  - {question: "Last prophylaxis", answer: "The last prophylaxis was May 14, 2026."}
+  - {question: "Last perio maintenance", answer: "There is no perio maintenance on record."}
+  - {question: "Last debridement", answer: "There is no debridement on record."}
+  - {question: "Last scaling and root planing (UR)", answer: "There is no scaling and root planing on record for that quadrant."}
+  - {question: "Last scaling and root planing (LR)", answer: "There is no scaling and root planing on record for that quadrant."}
+  - {question: "Last scaling and root planing (LL)", answer: "There is no scaling and root planing on record for that quadrant."}
+  - {question: "Last scaling and root planing (UL)", answer: "There is no scaling and root planing on record for that quadrant."}
+  - {question: "Last scaling and root planing (all)", answer: "There is no scaling and root planing on record."}
+  - {question: "Last sealants (children)", answer: "There are no sealants on record."}
+  - {question: "Crown history", answer: "A crown on tooth number three was completed in 2021."}
+  - {question: "Night guard history", answer: "There is no night guard on record."}
+  - {question: "Insurance representative's name", answer: "My name is Dana."}

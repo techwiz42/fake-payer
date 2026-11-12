@@ -11,7 +11,7 @@ GOOD = {"SONIOX_API_KEY": "soniox-secret-value-1", "ANTHROPIC_API_KEY": "model-s
 def test_reads_the_required_values_and_defaults_the_rest():
     config = Config.from_env(GOOD)
     assert config.number == "+12025550123"
-    assert (config.max_concurrent_calls, config.max_calls_per_number_per_hour, config.max_call_seconds) == (3, 120, 300)
+    assert (config.max_concurrent_calls, config.max_calls_per_number_per_hour, config.max_call_seconds) == (3, 120, 0)
     assert config.daily_spend_ceiling_usd == 5.0 and config.log_retention_days == 7 and config.tts_voice == "Adrian"
 
 

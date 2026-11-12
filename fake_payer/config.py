@@ -32,7 +32,7 @@ class Config:
     answer_key: str                               # a secret in the answer URL given to Vonage: only requests carrying it are answered
     max_concurrent_calls: int = 3
     max_calls_per_number_per_hour: int = 120
-    max_call_seconds: int = 300
+    max_call_seconds: int = 0                     # 0: no limit; a call lasts as long as the caller has questions (the daily spend ceiling still applies)
     daily_spend_ceiling_usd: float = 5.0
     log_retention_days: int = 7
     call_log_dir: str = "calls"
@@ -81,6 +81,11 @@ class Config:
         if not 0 <= reply_delay <= 10:
             raise ConfigError("REPLY_DELAY_SECONDS must be from 0 to 10")
 
+        raw_max = (env.get("MAX_CALL_SECONDS") or "").strip() or "0"
+        if not raw_max.isdigit():
+            raise ConfigError("MAX_CALL_SECONDS must be a whole number of seconds, or 0 for no limit")
+        max_call_seconds = int(raw_max)
+
         def number(name: str, default, kind):
             raw = (env.get(name) or "").strip()
             if not raw:
@@ -100,7 +105,7 @@ class Config:
             answer_key=_answer_key(env["ANSWER_KEY"]),
             max_concurrent_calls=number("MAX_CONCURRENT_CALLS", 3, int),
             max_calls_per_number_per_hour=number("MAX_CALLS_PER_NUMBER_PER_HOUR", 120, int),
-            max_call_seconds=number("MAX_CALL_SECONDS", 300, int),
+            max_call_seconds=max_call_seconds,
             daily_spend_ceiling_usd=number("DAILY_SPEND_CEILING_USD", 5.0, float),
             log_retention_days=number("LOG_RETENTION_DAYS", 7, int),
             call_log_dir=(env.get("CALL_LOG_DIR") or "calls").strip(),

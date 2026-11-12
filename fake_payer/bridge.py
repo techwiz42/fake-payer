@@ -607,7 +607,9 @@ class VoiceBridge:
     # ---- watchdog --------------------------------------------------------
 
     async def _watchdog(self, call: CallSocket) -> None:
-        """Hard cap per-call duration. Hangs up when exceeded: a model is not trusted to watch a clock."""
+        """Hard cap per-call duration, when there is one (max_call_seconds above zero). Hangs up when exceeded: a model is not trusted to watch a clock."""
+        if self._cfg.max_call_seconds <= 0:
+            await asyncio.Event().wait()                             # no limit: the call ends when someone hangs up
         deadline = self._started_at + self._cfg.max_call_seconds
         while True:
             remaining = deadline - time.monotonic()

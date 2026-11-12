@@ -455,3 +455,13 @@ async def test_the_call_is_not_ended_while_the_caller_is_still_asking(env, monke
     assert not env["call"].closed.is_set()
     env["call"].incoming.put_nowait(END)
     await task
+
+
+async def test_with_no_time_limit_the_call_goes_on_until_someone_hangs_up(env, monkeypatch):
+    bridge = VoiceBridge(settings(max_call_seconds=0), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await asyncio.sleep(0.3)
+    assert not env["call"].closed.is_set() and not task.done()
+    env["call"].incoming.put_nowait(END)
+    await asyncio.wait_for(task, timeout=3)
+    assert bridge.terminated_by == "caller"
