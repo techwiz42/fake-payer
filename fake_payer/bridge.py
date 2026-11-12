@@ -70,6 +70,16 @@ class CallSocket(Protocol):
         """Hang up."""
 
 
+HANG_UP_AFTER_SPEECH_SECONDS = 1.0             # the line stays open this long after the last word, as a person would put the phone down
+HANG_UP_PATIENCE_SECONDS = 30.0                # but never waits longer than this for the goodbye to play
+
+END_CALL_TOOL: Dict[str, Any] = {
+    "name": "end_call",
+    "description": "Hang up. Use it only after the caller has said they need nothing more, and after you have said a short goodbye in the same turn.",
+    "input_schema": {"type": "object", "properties": {}},
+}
+
+
 class BridgeState(str, Enum):
     CONNECTING = "connecting"
     LISTENING = "listening"            # waiting for caller speech
@@ -116,7 +126,7 @@ class VoiceBridge:
     def __init__(self, settings: BridgeSettings, tools: Dict[str, Tuple[Dict[str, Any], ToolFunction]], system_prompt: str):
         self._cfg = settings
         self._tools = tools
-        self._tool_defs_anthropic = [definition for (definition, _function) in tools.values()]
+        self._tool_defs_anthropic = [definition for (definition, _function) in tools.values()] + [END_CALL_TOOL]
         self._system_prompt = system_prompt
 
         self._stt: Optional[SonioxSTTClient] = None
@@ -142,6 +152,8 @@ class VoiceBridge:
         self._live_ids: set = set()              # audio from these syntheses (and stored phrases) may still be played; a barge-in empties it
         self._held_this_turn = False
         self._holds = 0
+        self._call: Optional[CallSocket] = None
+        self._ending = False                     # the model has decided the call is over: it hangs up once the goodbye has been heard
         # How long each reply took to begin: from the end-of-speech signal (Soniox raises it about 0.3 s after the caller stops) to the first audio sent.
         self._turn_end_at: Optional[float] = None
         self._reply_latencies: List[float] = []
@@ -179,6 +191,7 @@ class VoiceBridge:
                 self._failure_reason = self._failure_reason or f"connect_legs: {e}"
                 raise
             self._state = BridgeState.LISTENING
+            self._call = call
 
             if self._cfg.ring_audio:                                  # the line rings before anyone picks up
                 await play_pcm(call, self._cfg.ring_audio)
@@ -476,6 +489,8 @@ class VoiceBridge:
                 # listening when it has played. Only a turn with nothing to say hands control back now.
                 if not assistant.text.strip():
                     self._state = BridgeState.LISTENING
+                if self._ending:
+                    self._schedule_hang_up()
                 return
 
             # Run each tool_use and build the follow-up user message.
@@ -496,6 +511,9 @@ class VoiceBridge:
 
     async def _run_tool(self, call: ToolUseCall) -> Dict[str, Any]:
         """Run one tool the model asked for and return its tool_result block. An unknown tool or a failing one is reported to the model, not raised: the call goes on."""
+        if call.name == END_CALL_TOOL["name"]:
+            self._ending = True
+            return {"type": "tool_result", "tool_use_id": call.id, "content": json.dumps({"ok": True, "note": "The line closes after your goodbye has been heard. Say nothing more."})}
         entry = self._tools.get(call.name)
         if entry is None:
             return {"type": "tool_result", "tool_use_id": call.id, "content": json.dumps({"error": f"unknown tool {call.name}"}), "is_error": True}
@@ -605,6 +623,26 @@ class VoiceBridge:
                 await self._hang_up(call)
                 return
             await asyncio.sleep(min(remaining, 5.0))
+
+    def _schedule_hang_up(self) -> None:
+        if self._call is None:
+            return
+        task = asyncio.create_task(self._hang_up_when_the_goodbye_is_heard(self._call))
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _hang_up_when_the_goodbye_is_heard(self, call: CallSocket) -> None:
+        """The model ended the call: wait until everything it said has been played, then a moment more, and close the line."""
+        give_up = time.monotonic() + HANG_UP_PATIENCE_SECONDS
+        while time.monotonic() < give_up:
+            idle = (self._playout.empty() and self._turn_end_at is None and self._state != BridgeState.THINKING
+                    and time.monotonic() >= self._play_until + HANG_UP_AFTER_SPEECH_SECONDS)
+            if idle:
+                break
+            await asyncio.sleep(0.2)
+        logger.info("bridge hang-up: the representative ended the call (call=%s)", self._cfg.call_uuid)
+        self._terminated_by = self._terminated_by or "hangup"
+        await self._hang_up(call)
 
     async def _hang_up(self, call: CallSocket) -> None:
         try:

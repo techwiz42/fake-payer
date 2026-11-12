@@ -417,3 +417,41 @@ async def test_how_long_each_reply_took_to_begin_is_measured(env, monkeypatch):
     assert len(bridge.reply_latencies_ms) == 1                 # the greeting is not a reply, and later audio of the same reply is not counted again
     env["call"].incoming.put_nowait(END)
     await task
+
+
+async def test_the_representative_ends_the_call_after_the_goodbye_has_been_heard(env, monkeypatch):
+    monkeypatch.setattr(bridge_module, "HANG_UP_AFTER_SPEECH_SECONDS", 0.05)
+
+    async def script(messages, on_text, cancel):
+        if len(env["turns"]) == 1:
+            await on_text("Goodbye.")
+            return StreamedAssistantMessage(content=[{"type": "text", "text": "Goodbye."}, {"type": "tool_use", "id": "e1", "name": "end_call", "input": {}}], stop_reason="tool_use")
+        return text_message("")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(), {}, "persona")
+    assert any(t["name"] == "end_call" for t in bridge._tool_defs_anthropic)
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await say(env, "that is all, thank you")
+    await until(lambda: env["tts"].finalized)
+    await env["tts"].queue.put(TTSAudioChunk(synthesis_id="stream-1", pcm16_bytes=b"\x00" * 640))
+    await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="stream-1"))
+    await asyncio.wait_for(env["call"].closed.wait(), timeout=3)
+    await task
+    assert bridge.terminated_by == "hangup" and env["call"].played                     # the goodbye was played before the line closed
+
+
+async def test_the_call_is_not_ended_while_the_caller_is_still_asking(env, monkeypatch):
+    async def script(messages, on_text, cancel):
+        await on_text("Yes.")
+        return text_message("Yes.")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await say(env, "is it covered")
+    await until(lambda: env["tts"].finalized)
+    await asyncio.sleep(0.3)
+    assert not env["call"].closed.is_set()
+    env["call"].incoming.put_nowait(END)
+    await task

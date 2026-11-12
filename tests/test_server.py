@@ -168,7 +168,7 @@ async def test_by_default_a_call_runs_with_the_lookup_tool_and_the_persona_carry
             await until(lambda: seen)
     finally:
         await context.__aexit__(None, None, None)
-    assert seen["tools"] == ["lookup_coverage"] and call_reference("call-77") in seen["prompt"]
+    assert seen["tools"] == ["lookup_coverage", "end_call"] and call_reference("call-77") in seen["prompt"]
 
 
 @pytest.mark.parametrize("path", ["/answer?uuid=abc-123", "/answer?key=wrong-key-wrong-key&uuid=abc-123", "/answer?key=&uuid=abc-123"])
