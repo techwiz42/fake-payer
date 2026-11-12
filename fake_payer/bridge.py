@@ -93,6 +93,7 @@ class BridgeSettings:
     time_up_audio: Optional[bytes] = None      # said, in the same voice, just before the line hangs up at the length limit
     hold_audio: Optional[bytes] = None         # "one moment while I look that up": played at once when the model asks for a lookup before it has said anything
     hold_text: str = ""                        # what hold_audio says, for the transcript
+    ring_audio: Optional[bytes] = None         # the ringing the caller hears before the line answers
 
 
 @dataclass
@@ -176,6 +177,9 @@ class VoiceBridge:
                 self._failure_reason = self._failure_reason or f"connect_legs: {e}"
                 raise
             self._state = BridgeState.LISTENING
+
+            if self._cfg.ring_audio:                                  # the line rings before anyone picks up
+                await play_pcm(call, self._cfg.ring_audio)
 
             # Initial greeting. The bridge is otherwise purely reactive: it waits for STT speech-ended before doing anything. Without a proactive greeting the
             # caller hears silence and hangs up (observed: 36 s -> caller-terminated, 0 turns).

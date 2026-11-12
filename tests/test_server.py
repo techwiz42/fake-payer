@@ -15,7 +15,7 @@ from fake_payer.soniox_streaming_client import STTFinalTranscript, STTSpeechEnde
 from tests.test_bridge import FakeSTT, FakeTTS, until
 
 KEY = "test-answer-key-0123456789"
-CONFIG = Config.from_env({"SONIOX_API_KEY": "k", "ANTHROPIC_API_KEY": "m", "FAKE_PAYER_NUMBER": "+12025550123", "ANSWER_KEY": KEY})
+CONFIG = Config.from_env({"SONIOX_API_KEY": "k", "ANTHROPIC_API_KEY": "m", "FAKE_PAYER_NUMBER": "+12025550123", "ANSWER_KEY": KEY, "RING_COUNT": "0"})
 
 
 async def http_get(port, path, host="line.example.org"):
@@ -198,7 +198,7 @@ async def test_the_audio_websocket_cannot_be_opened_without_going_through_the_an
 
 
 def limited_config(**env):
-    return Config.from_env({"SONIOX_API_KEY": "k", "ANTHROPIC_API_KEY": "m", "FAKE_PAYER_NUMBER": "+12025550123", "ANSWER_KEY": KEY, **env})
+    return Config.from_env({"SONIOX_API_KEY": "k", "ANTHROPIC_API_KEY": "m", "FAKE_PAYER_NUMBER": "+12025550123", "ANSWER_KEY": KEY, "RING_COUNT": "0", **env})
 
 
 def refusal_audio():

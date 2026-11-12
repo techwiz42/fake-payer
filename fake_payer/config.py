@@ -43,6 +43,7 @@ class Config:
     cost_per_minute_usd: float = 0.15
     audio_cache_dir: str = "audio_cache"
     tts_model: str = "tts-rt-v1"
+    ring_count: int = 2                           # rings the caller hears before the line answers; 0 answers at once
 
     def __repr__(self) -> str:
         shown = {f.name: ("<set>" if f.name in _SECRETS else getattr(self, f.name)) for f in fields(self)}
@@ -56,6 +57,11 @@ class Config:
         missing = [name for name in REQUIRED if not (env.get(name) or "").strip()]
         if missing:
             raise ConfigError("missing required configuration: " + ", ".join(missing))
+
+        raw_rings = (env.get("RING_COUNT") or "").strip() or "2"
+        if not raw_rings.isdigit() or int(raw_rings) > 6:
+            raise ConfigError("RING_COUNT must be a whole number from 0 (answer at once) to 6")
+        ring_count = int(raw_rings)
 
         def number(name: str, default, kind):
             raw = (env.get(name) or "").strip()
@@ -87,4 +93,5 @@ class Config:
             cost_per_minute_usd=number("COST_PER_MINUTE_USD", 0.15, float),
             audio_cache_dir=(env.get("AUDIO_CACHE_DIR") or "audio_cache").strip(),
             tts_model=(env.get("SONIOX_TTS_MODEL") or "tts-rt-v1").strip(),
+            ring_count=ring_count,
         )

@@ -21,7 +21,7 @@ from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 from websockets.http11 import Request, Response
 
-from .audio import play_pcm
+from .audio import play_pcm, ringback_pcm
 from .calllog import CallLog, ended_by, turns_from_transcript
 from .bridge import BridgeSettings, ToolFunction, VoiceBridge
 from .config import Config
@@ -72,6 +72,7 @@ class FakePayerServer:
         self._tokens = CallTokens(config.answer_key)
         self._limits = limits or Limits(config)
         self._refusals = refusals or Refusals()
+        self._ring_audio = ringback_pcm(config.ring_count)
         self._active_calls: set = set()
         self._log = CallLog(config.call_log_dir)
 
@@ -138,6 +139,7 @@ class FakePayerServer:
             time_up_audio=self._refusals.audio.get("time"),
             hold_audio=self._refusals.audio.get("hold"),
             hold_text=PHRASES["hold"],
+            ring_audio=self._ring_audio,
         )
         bridge = VoiceBridge(settings, self._tools, self._system_prompt if self._system_prompt is not None else build_system_prompt(call_uuid))
         try:
