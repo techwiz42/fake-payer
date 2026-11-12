@@ -18,7 +18,7 @@ Design stage. The first change is specified in [`openspec/changes/add-fake-payer
 ## What it will be
 
 - One cooperative representative, answering coverage questions about fictional members.
-- Real-time speech in and out with [Soniox](https://soniox.com) (voice "Mark"), a language model for the conversation, and a telephone number delivered by Vonage.
+- Real-time speech in and out with [Soniox](https://soniox.com) (voice "Adrian"), a language model for the conversation, and a telephone number delivered by Vonage.
 - Anyone with the number may call, so it limits simultaneous calls, calls per number, call length and daily spend, and says on every call that it is fictional and recorded.
 - No user interface and no web pages. Each call is written to a local file; a command reads them back.
 

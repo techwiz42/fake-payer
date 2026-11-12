@@ -1,0 +1,14 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+__pycache__
+*.pyc
+*.egg-info
+calls
+audio_cache
+tests
+openspec
+.claude
+.github

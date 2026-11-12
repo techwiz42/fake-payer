@@ -41,7 +41,7 @@ async def test_every_phrase_is_synthesized_once_in_the_configured_voice(tmp_path
     refusals = Refusals()
     await refusals.prepare(config(tmp_path))
     assert set(refusals.audio) == set(PHRASES) == {"busy", "rate", "spend", "time"}
-    assert {c.kw["voice"] for c in SynthTTS.made} == {"Mark"} and {c.kw["sample_rate"] for c in SynthTTS.made} == {8000}
+    assert {c.kw["voice"] for c in SynthTTS.made} == {"Adrian"} and {c.kw["sample_rate"] for c in SynthTTS.made} == {8000}
     assert sorted(t for c in SynthTTS.made for t in c.said) == sorted(PHRASES.values())
 
 
@@ -54,7 +54,7 @@ async def test_the_second_start_uses_the_stored_audio_and_the_voice_is_part_of_w
     await again.prepare(config(tmp_path))
     assert len(SynthTTS.made) == made_first and set(again.audio) == set(PHRASES)          # nothing was synthesized the second time
     await Refusals().prepare(config(tmp_path, TTS_VOICE="Other"))
-    assert len(SynthTTS.made) == made_first + len(PHRASES)                                  # a different voice is not served from Mark's audio
+    assert len(SynthTTS.made) == made_first + len(PHRASES)                                  # a different voice is not served from Adrian's audio
 
 
 async def test_a_phrase_that_cannot_be_made_is_left_out_and_the_line_can_still_start(tmp_path, monkeypatch):

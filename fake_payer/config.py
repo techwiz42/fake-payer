@@ -36,7 +36,7 @@ class Config:
     daily_spend_ceiling_usd: float = 5.0
     log_retention_days: int = 7
     call_log_dir: str = "calls"
-    tts_voice: str = "Mark"
+    tts_voice: str = "Adrian"
     stt_model: str = "stt-rt-preview"
     listen_host: str = "127.0.0.1"
     port: int = 8080
@@ -80,7 +80,7 @@ class Config:
             daily_spend_ceiling_usd=number("DAILY_SPEND_CEILING_USD", 5.0, float),
             log_retention_days=number("LOG_RETENTION_DAYS", 7, int),
             call_log_dir=(env.get("CALL_LOG_DIR") or "calls").strip(),
-            tts_voice=(env.get("TTS_VOICE") or "Mark").strip(),
+            tts_voice=(env.get("TTS_VOICE") or "Adrian").strip(),
             stt_model=(env.get("SONIOX_STT_MODEL") or "stt-rt-preview").strip(),
             listen_host=(env.get("LISTEN_HOST") or "127.0.0.1").strip(),
             port=number("PORT", 8080, int),

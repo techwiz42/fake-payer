@@ -80,7 +80,7 @@ class BridgeSettings:
     soniox_api_key: str
     stt_model: str = "stt-rt-preview"
     tts_model: str = "tts-rt-v1"
-    tts_voice: str = "Mark"
+    tts_voice: str = "Adrian"
     max_call_seconds: float = 300
     language: str = "en"
     time_up_audio: Optional[bytes] = None      # said, in the same voice, just before the line hangs up at the length limit

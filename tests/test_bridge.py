@@ -119,11 +119,11 @@ async def say(env, text):
 
 
 async def test_the_greeting_is_spoken_first_in_the_configured_voice_and_the_model_knows_it(env, monkeypatch):
-    bridge = VoiceBridge(settings(tts_voice="Mark"), {}, "persona")
+    bridge = VoiceBridge(settings(tts_voice="Adrian"), {}, "persona")
     task = asyncio.create_task(bridge.run(env["call"]))
     await until(lambda: "tts" in env and env["tts"].synthesized)
     assert env["tts"].synthesized == ["This is a fictional line."]
-    assert env["tts"].kwargs["voice"] == "Mark" and env["tts"].kwargs["sample_rate"] == 8000
+    assert env["tts"].kwargs["voice"] == "Adrian" and env["tts"].kwargs["sample_rate"] == 8000
     assert env["stt"].kwargs["sample_rate"] == 8000
     env["call"].incoming.put_nowait(END)
     await task

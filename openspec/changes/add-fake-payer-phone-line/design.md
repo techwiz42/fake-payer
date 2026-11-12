@@ -37,7 +37,7 @@ Not copied: anything about tenants, patients, redaction, scheduling or the platf
 
 **2. Telephony: one number at a hosted voice API, delivered by two endpoints.** An inbound call makes the provider fetch an answer response from us (an HTTP request) and then open an audio websocket to us. Both are served by one small asyncio server with no pages and no other routes. Alternative considered: running our own SIP server, which is far more to run and secure for no gain at this volume.
 
-**3. Speech and model.** Soniox real-time speech-to-text and text-to-speech (as decided by the owner); the language model is Claude through the copied streaming client. The voice is Soniox's "Mark", set in configuration and used for every utterance, including the disclosure and spoken refusals. The reply is streamed into text-to-speech as it is produced, which is what makes the line feel live.
+**3. Speech and model.** Soniox real-time speech-to-text and text-to-speech (as decided by the owner); the language model is Claude through the copied streaming client. The voice is Soniox's "Adrian", set in configuration and used for every utterance, including the disclosure and spoken refusals. The reply is streamed into text-to-speech as it is produced, which is what makes the line feel live.
 
 **4. Facts come from a lookup, not from the model.** The model is told the persona and given one tool, `lookup_coverage(member_id, date_of_birth, procedure_code)`, that reads the fixture and returns a record or "not found". It is told never to state a coverage value that did not come from a tool result. A test replays transcripts and fails if a number in the representative's speech is not in the tool results.
 

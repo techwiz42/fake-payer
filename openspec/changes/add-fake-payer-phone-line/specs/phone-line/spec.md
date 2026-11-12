@@ -28,11 +28,11 @@ Only a call that came through the line's answer request SHALL be able to open th
 - **THEN** it is refused and no token is issued
 
 ### Requirement: Voice
-The line SHALL speak every utterance, including the disclosure and the spoken refusals, in the Soniox voice named "Mark".
+The line SHALL speak every utterance, including the disclosure and the spoken refusals, in the Soniox voice named "Adrian".
 
 #### Scenario: Any utterance
 - **WHEN** the line speaks, for any reason
-- **THEN** it is the voice "Mark"
+- **THEN** it is the voice "Adrian"
 
 ### Requirement: Talking over the line
 The caller SHALL be able to speak while the line is speaking. The line SHALL stop speaking, drop what it had not yet said, and listen.
