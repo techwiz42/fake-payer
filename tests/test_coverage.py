@@ -15,7 +15,8 @@ def fixture():
 def test_a_member_number_and_date_of_birth_verify_the_member_and_give_the_plan_and_benefits(fixture):
     result = fixture.lookup(member_id="M100001", date_of_birth="1985-03-14")
     assert result["verified"] and result["eligibility"] == {"status": "active", "effective_date": "2025-01-01"}
-    assert result["plan"] == {"name": "Acme Gold Dental", "annual_maximum": 1500, "deductible": 50, "family_deductible": 150, "orthodontic_lifetime_maximum": 1500,
+    assert result["plan"] == {"name": "Acme Gold Dental", "annual_maximum": 1500, "deductible": 50, "family_deductible": 150, "orthodontic_lifetime_maximum": 1500, "orthodontic_age_limit": 65, "orthodontic_lifetime_maximum_used": 0,
+                              "orthodontic_lifetime_maximum_remaining": 1500,
                               "annual_maximum_remaining": 1500, "deductible_remaining": 50}
     assert list(result["benefits"]) == ["preventive", "basic", "major", "orthodontics"]
 

@@ -214,6 +214,12 @@ class Fixture:
             block["family_deductible"] = plan["family_deductible"]
         if "orthodontic_lifetime_maximum" in plan:
             block["orthodontic_lifetime_maximum"] = plan["orthodontic_lifetime_maximum"]
+            if plan.get("orthodontic_age_limit") is not None:
+                block["orthodontic_age_limit"] = plan["orthodontic_age_limit"]
+            if member is not None:
+                used = member.get("orthodontic_used", 0)
+                block["orthodontic_lifetime_maximum_used"] = used
+                block["orthodontic_lifetime_maximum_remaining"] = max(0, plan["orthodontic_lifetime_maximum"] - used)
         if member is not None:
             block["annual_maximum_remaining"] = max(0, plan["annual_maximum"] - member.get("annual_maximum_used", 0))
             block["deductible_remaining"] = max(0, plan["deductible"] - member.get("deductible_met", 0))

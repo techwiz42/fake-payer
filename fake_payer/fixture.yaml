@@ -19,6 +19,7 @@ plans:
     waiting_period_months: {preventive: 0, basic: 6, major: 12, orthodontics: 12}
     percent: {preventive: 100, basic: 80, major: 50, orthodontics: 50}
     orthodontic_lifetime_maximum: 1500
+    orthodontic_age_limit: 65
   SILVER:
     name: Acme Silver Dental
     annual_maximum: 1000
@@ -215,9 +216,9 @@ benefit_answers:
   - {question: "Student status requirement", answer: "No, student status is not required."}
   - {question: "Ortho coverage %", answer: "Orthodontics is covered at fifty percent."}
   - {question: "Ortho maximum $ (and how much is used)", answer: "The orthodontic lifetime maximum is fifteen hundred dollars, and none of it has been used."}
-  - {question: "Does a deductible apply to orthodontics?", answer: "No, a deductible does not apply to orthodontics."}
+  - {question: "Does a deductible apply to orthodontics?", answer: "Yes, the deductible applies to orthodontics."}
   - {question: "Adult orthodontic coverage?", answer: "Yes, adult orthodontics is covered."}
-  - {question: "Orthodontic coverage to what age?", answer: "There is no age limit for orthodontic coverage."}
+  - {question: "Orthodontic coverage to what age?", answer: "Orthodontic coverage is for patients up to age sixty-five."}
   - {question: "How is orthodontics paid?", answer: "Orthodontics is paid twenty percent of the benefit when the braces are placed, and the rest in equal quarterly payments over the treatment period."}
   - {question: "Is orthodontic treatment covered once per lifetime?", answer: "Yes, orthodontic treatment is covered once per lifetime."}
   - {question: "Does a missing-tooth clause apply to orthodontics?", answer: "Yes. The missing tooth clause applies to both orthodontics and general dentistry: the plan covers up to two missing teeth."}
