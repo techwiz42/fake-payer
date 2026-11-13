@@ -68,7 +68,7 @@ Each call is written to a JSON file in `CALL_LOG_DIR` (the turns, how it ended, 
 
 ## Deploying
 
-The `Dockerfile` builds an image that keeps the call log and cached audio in the `/data` volume and listens on port 8080 behind a host reverse proxy. The Cyberiad deployment (VM, DNS, secrets, number linking and `update-fake-payer.sh <sha>`) is scripted in the `cyberiad-infra` repository, not here. Redeploy only when no call is in progress.
+The `Dockerfile` builds an image that keeps the call log and cached audio in the `/data` volume and listens on port 8080 behind a host reverse proxy. The hosting that runs it (VM, DNS, secrets, number linking and redeploys) is scripted in a separate infrastructure repository, not here. Redeploy only when no call is in progress.
 
 ## Not in this repository
 
