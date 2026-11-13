@@ -75,4 +75,9 @@ def test_the_prompt_does_not_ask_for_a_procedure_code_to_answer_a_benefits_quest
 
 def test_it_is_told_to_look_everything_up_before_it_speaks_and_to_reply_in_one_go():
     prompt = build_system_prompt("call-1")
-    assert "Make every tool call first, before you say anything" in prompt and "never a separate one afterwards" in prompt
+    assert "Make every tool call first, before you say anything" in prompt 
+
+
+def test_it_does_not_ask_whether_there_is_anything_else_after_each_answer():
+    prompt = build_system_prompt("call-1")
+    assert 'Do not ask "Is there anything else I can help you with?"' in prompt and "never after each answer" in prompt
