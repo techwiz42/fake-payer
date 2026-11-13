@@ -480,3 +480,31 @@ async def test_hearing_a_dial_tone_the_line_hangs_up(env, monkeypatch):
     await asyncio.wait_for(env["call"].closed.wait(), timeout=3)
     await asyncio.wait_for(task, timeout=3)
     assert bridge.terminated_by == "caller"
+
+
+async def test_while_audibly_speaking_the_line_carries_on_when_talked_over_and_the_words_are_not_a_turn(env, monkeypatch):
+    async def script(messages, on_text, cancel):
+        await on_text("Should not be asked.")
+        return text_message("Should not be asked.")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(keep_the_floor=True), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["tts"].queue.put(TTSAudioChunk(synthesis_id="greeting-1", pcm16_bytes=b"\x01" * 16000))      # a second of the greeting, now playing
+    await until(lambda: env["call"].played)
+    await say(env, "excuse me, one question")                                                              # the caller talks over it
+    await asyncio.sleep(0.2)
+    assert env["tts"].cancelled == 0 and env["turns"] == []                                                 # not cut off, and what was said is not a turn
+    assert bridge._talked_over is False                                                                     # and the next thing the caller says is heard as usual
+    env["call"].incoming.put_nowait(END)
+    await task
+
+
+async def test_before_it_is_audible_the_caller_still_has_the_floor(env, monkeypatch):
+    bridge = VoiceBridge(settings(keep_the_floor=True), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await env["stt"].queue.put(STTSpeechStarted())                                                         # nothing has been heard yet: the pause before a reply is the caller's
+    await until(lambda: env["tts"].cancelled == 1)
+    env["call"].incoming.put_nowait(END)
+    await task

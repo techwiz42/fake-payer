@@ -170,8 +170,8 @@ async def test_the_tool_takes_every_field_as_optional_and_is_the_lookup(fixture)
 
 
 def test_the_standing_answers_come_back_with_every_lookup_even_before_a_patient_is_found(fixture):
-    expected = {"employee_id": "3141", "fee_schedule": "The fee schedule that applies is dated 2026.", "covered_once_per_lifetime": "Yes.", "missing_tooth_clause": "The plan covers up to two missing teeth.",
-                "paid_by_prior_carrier": "Unknown.", "treatment_in_progress_how_paid": "Unknown."}
+    expected = {"employee_id": "3141", "fee_schedule": "The fee schedule that applies is dated 2026.", "covered_once_per_lifetime": "Yes.", "missing_tooth_clause": "The missing tooth clause applies to both orthodontics and general dentistry: the plan covers up to two missing teeth.",
+                "paid_by_prior_carrier": "A prior carrier has paid nothing toward orthodontics: zero dollars.", "treatment_in_progress_how_paid": "There is no treatment already in progress."}
     assert fixture.lookup()["standing_answers"] == expected
     assert fixture.lookup(member_id="M100001", date_of_birth="1985-03-14")["standing_answers"] == expected
 

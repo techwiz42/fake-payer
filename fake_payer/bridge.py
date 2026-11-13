@@ -72,6 +72,7 @@ class CallSocket(Protocol):
 
 
 HANG_UP_AFTER_SPEECH_SECONDS = 1.0             # the line stays open this long after the last word, as a person would put the phone down
+HOLD_THE_FLOOR_GRACE_SECONDS = 1.0          # between sentences of one reply the line still counts as speaking for this long
 HANG_UP_TONE_SECONDS = 3.0                     # after it hangs up, the caller hears a dial tone until they hang up too, for at most this long
 HANG_UP_PATIENCE_SECONDS = 30.0                # but never waits longer than this for the goodbye to play
 
@@ -106,6 +107,7 @@ class BridgeSettings:
     hold_audio: Optional[bytes] = None         # "one moment while I look that up": played at once when the model asks for a lookup before it has said anything
     hold_text: str = ""                        # what hold_audio says, for the transcript
     ring_audio: Optional[bytes] = None         # the ringing the caller hears before the line answers
+    keep_the_floor: bool = False               # while it is audibly speaking it carries on when the caller talks over it (the caller is expected to stop and listen); what the caller says meanwhile is not a turn
     reply_delay_seconds: float = 0.0           # the least time from the caller finishing a question to the first sound of the reply
     answer_delay_seconds: float = 0.0          # silence after the ringing, before the greeting
 
@@ -156,6 +158,7 @@ class VoiceBridge:
         self._holds = 0
         self._call: Optional[CallSocket] = None
         self._dial_tone = DialToneDetector()
+        self._talked_over = False                # the caller began to speak while we held the floor: its words are not taken as a turn
         self._ending = False                     # the model has decided the call is over: it hangs up once the goodbye has been heard
         # How long each reply took to begin: from the end-of-speech signal (Soniox raises it about 0.3 s after the caller stops) to the first audio sent.
         self._turn_end_at: Optional[float] = None
@@ -310,12 +313,20 @@ class VoiceBridge:
             except Exception as exc:
                 logger.debug("STT finalize failed (best-effort): %s", exc)
 
+    def _holding_the_floor(self) -> bool:
+        """Audibly speaking right now (not merely about to: the pause before a reply is the caller's to use) and set to carry on when talked over."""
+        return (self._cfg.keep_the_floor and self._state == BridgeState.AGENT_SPEAKING and self._turn_end_at is None
+                and time.monotonic() < self._play_until + HOLD_THE_FLOOR_GRACE_SECONDS)
+
     # ---- inbound event loop: STT -> turn state machine -------------------
 
     async def _stt_event_loop(self, call: CallSocket) -> None:
         assert self._stt is not None
         async for event in self._stt.events():
             if isinstance(event, STTSpeechStarted):
+                if self._holding_the_floor():
+                    self._talked_over = True                          # carry on speaking; the caller yields
+                    continue
                 # Barge-in: if the agent is currently speaking, cancel everything.
                 if self._state in (BridgeState.AGENT_SPEAKING, BridgeState.THINKING):
                     await self._barge_in()
@@ -324,16 +335,24 @@ class VoiceBridge:
             elif isinstance(event, STTPartialTranscript):
                 # Length only is ever logged: a transcript is the caller's own words.
                 # Partial transcripts may also indicate barge-in mid-response.
+                if self._talked_over or self._holding_the_floor():
+                    continue
                 if self._state == BridgeState.AGENT_SPEAKING and event.text:
                     await self._barge_in()
                     self._state = BridgeState.CALLER_SPEAKING
 
             elif isinstance(event, STTFinalTranscript):
+                if self._talked_over:
+                    continue
                 self._pending_user_text.append(event.segment)
                 if event.language:
                     self._caller_language = event.language
 
             elif isinstance(event, STTSpeechEnded):
+                if self._talked_over:
+                    self._talked_over = False
+                    self._pending_user_text.clear()
+                    continue
                 if self._pending_user_text:
                     user_text = "".join(self._pending_user_text).strip()
                     self._pending_user_text.clear()

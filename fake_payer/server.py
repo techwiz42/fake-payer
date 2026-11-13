@@ -142,6 +142,7 @@ class FakePayerServer:
             ring_audio=self._ring_audio,
             answer_delay_seconds=self._config.answer_delay_seconds,
             reply_delay_seconds=self._config.reply_delay_seconds,
+            keep_the_floor=self._config.keep_the_floor,
         )
         bridge = VoiceBridge(settings, self._tools, self._system_prompt if self._system_prompt is not None else build_system_prompt(call_uuid))
         try:

@@ -54,3 +54,8 @@ def test_the_answer_key_must_be_long_and_plain_and_defaults_exist_for_the_new_se
             Config.from_env({**GOOD, "ANSWER_KEY": bad})
     config = Config.from_env(GOOD)
     assert config.cost_per_minute_usd == 0.15 and config.audio_cache_dir == "audio_cache"
+
+
+def test_the_line_keeps_the_floor_when_talked_over_unless_told_not_to():
+    assert Config.from_env(GOOD).keep_the_floor is True
+    assert Config.from_env({**GOOD, "KEEP_THE_FLOOR": "0"}).keep_the_floor is False

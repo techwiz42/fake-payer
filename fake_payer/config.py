@@ -43,6 +43,7 @@ class Config:
     cost_per_minute_usd: float = 0.15
     audio_cache_dir: str = "audio_cache"
     tts_model: str = "tts-rt-v1"
+    keep_the_floor: bool = True                   # it carries on speaking when the caller talks over it (KEEP_THE_FLOOR=0 lets the caller cut it off)
     reply_delay_seconds: float = 2.0              # the least time from the caller finishing to the first sound of the reply
     answer_delay_seconds: float = 2.0             # silence between the last ring and the greeting
     ring_count: int = 2                           # rings the caller hears before the line answers; 0 answers at once
@@ -119,4 +120,5 @@ class Config:
             ring_count=ring_count,
             answer_delay_seconds=answer_delay,
             reply_delay_seconds=reply_delay,
+            keep_the_floor=(env.get("KEEP_THE_FLOOR") or "1").strip().lower() not in ("0", "false", "no"),
         )

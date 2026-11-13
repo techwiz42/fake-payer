@@ -33,9 +33,9 @@ standing_answers:
   employee_id: "3141"                         # the representative's employee ID, if asked for it
   fee_schedule: "The fee schedule that applies is dated 2026."
   covered_once_per_lifetime: "Yes."
-  missing_tooth_clause: "The plan covers up to two missing teeth."
-  paid_by_prior_carrier: "Unknown."
-  treatment_in_progress_how_paid: "Unknown."
+  missing_tooth_clause: "The missing tooth clause applies to both orthodontics and general dentistry: the plan covers up to two missing teeth."
+  paid_by_prior_carrier: "A prior carrier has paid nothing toward orthodontics: zero dollars."
+  treatment_in_progress_how_paid: "There is no treatment already in progress."
 
 groups:
   G10001: {plan: GOLD, employer: Sample Manufacturing Company}
@@ -207,7 +207,7 @@ benefit_answers:
   - {question: "Crown D2740 coverage %", answer: "A porcelain crown is covered at fifty percent."}
   - {question: "Crown D2750 coverage %", answer: "A porcelain-fused-to-metal crown is covered at fifty percent."}
   - {question: "Replacement rule for crowns", answer: "A crown is covered once per tooth every five years."}
-  - {question: "Missing tooth clause", answer: "The plan covers up to two missing teeth."}
+  - {question: "Missing tooth clause", answer: "The missing tooth clause applies to both orthodontics and general dentistry: the plan covers up to two missing teeth."}
   - {question: "Waiting period for basic procedures (months)", answer: "The waiting period for basic procedures is six months."}
   - {question: "Waiting period for major procedures (months)", answer: "The waiting period for major procedures is twelve months."}
   - {question: "Waiting period for orthodontics (months)", answer: "The waiting period for orthodontics is twelve months."}
@@ -220,9 +220,9 @@ benefit_answers:
   - {question: "Orthodontic coverage to what age?", answer: "There is no age limit for orthodontic coverage."}
   - {question: "How is orthodontics paid?", answer: "Orthodontics is paid twenty percent of the benefit when the braces are placed, and the rest in equal quarterly payments over the treatment period."}
   - {question: "Is orthodontic treatment covered once per lifetime?", answer: "Yes, orthodontic treatment is covered once per lifetime."}
-  - {question: "Does a missing-tooth clause apply to orthodontics?", answer: "The plan covers up to two missing teeth."}
-  - {question: "Orthodontic benefit already paid by a prior carrier ($)", answer: "Unknown."}
-  - {question: "Treatment already in progress at the effective date: how is it paid?", answer: "Unknown."}
+  - {question: "Does a missing-tooth clause apply to orthodontics?", answer: "Yes. The missing tooth clause applies to both orthodontics and general dentistry: the plan covers up to two missing teeth."}
+  - {question: "Orthodontic benefit already paid by a prior carrier ($)", answer: "A prior carrier has paid nothing toward orthodontics: zero dollars."}
+  - {question: "Treatment already in progress at the effective date: how is it paid?", answer: "There is no treatment already in progress."}
   - {question: "Last full-mouth series or panoramic", answer: "The last full-mouth series or panoramic was March 12, 2023."}
   - {question: "Eligible for a full-mouth series or panoramic now?", answer: "Yes, the patient is eligible for a full-mouth series or panoramic now."}
   - {question: "Last exam", answer: "The last exam was May 14, 2026."}
