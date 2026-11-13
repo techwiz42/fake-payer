@@ -1,7 +1,7 @@
 """The opening line: names the fictional provider, says it is fictional and that the call is recorded, and never names a real insurer."""
 import asyncio
 
-from fake_payer.persona import DISCLOSURE, PROVIDER_NAME
+from fake_payer.persona import DISCLOSURE, PROVIDER_NAME, build_system_prompt
 from fake_payer.real_data_check import scan_text
 
 
@@ -71,3 +71,8 @@ def test_the_prompt_does_not_ask_for_a_procedure_code_to_answer_a_benefits_quest
     from fake_payer.persona import build_system_prompt
     prompt = build_system_prompt("call-uuid-1")
     assert "A procedure code is not needed" in prompt and "ask for the code" not in prompt.lower().replace("offer the code", "")
+
+
+def test_it_is_told_to_look_everything_up_before_it_speaks_and_to_reply_in_one_go():
+    prompt = build_system_prompt("call-1")
+    assert "Make every tool call first, before you say anything" in prompt and "never a separate one afterwards" in prompt
