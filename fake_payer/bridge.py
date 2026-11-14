@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -73,12 +74,14 @@ class CallSocket(Protocol):
 
 HANG_UP_AFTER_SPEECH_SECONDS = 1.0             # the line stays open this long after the last word, as a person would put the phone down
 HOLD_THE_FLOOR_GRACE_SECONDS = 1.0          # between sentences of one reply the line still counts as speaking for this long
+# The representative hangs up only after the caller has said goodbye: "that is all, thank you" is not the end of the call, the caller's own goodbye is.
+CALLER_GOODBYE = re.compile(r"\b(good\s?-?\s?bye|bye(\s|-)?bye|bye|take care|have a (good|great|nice|wonderful) (day|one|evening|afternoon))\b", re.I)
 HANG_UP_TONE_SECONDS = 3.0                     # after it hangs up, the caller hears a dial tone until they hang up too, for at most this long
 HANG_UP_PATIENCE_SECONDS = 30.0                # but never waits longer than this for the goodbye to play
 
 END_CALL_TOOL: Dict[str, Any] = {
     "name": "end_call",
-    "description": "Hang up. Use it only after the caller has said they need nothing more, and after you have said a short goodbye in the same turn.",
+    "description": "Hang up. Use it only after the caller has said goodbye (not just thanks, and not just that they need nothing more), and after you have said a short goodbye back in the same turn.",
     "input_schema": {"type": "object", "properties": {}},
 }
 
@@ -539,6 +542,11 @@ class VoiceBridge:
     async def _run_tool(self, call: ToolUseCall) -> Dict[str, Any]:
         """Run one tool the model asked for and return its tool_result block. An unknown tool or a failing one is reported to the model, not raised: the call goes on."""
         if call.name == END_CALL_TOOL["name"]:
+            last_caller = next((t.text for t in reversed(self._transcript) if t.role == "user"), "")
+            if not CALLER_GOODBYE.search(last_caller):
+                return {"type": "tool_result", "tool_use_id": call.id, "is_error": True, "content": json.dumps({
+                    "ok": False, "error": "The caller has not said goodbye yet, so the call is not over. Do not end it and do not say goodbye yourself. Answer anything they asked, "
+                                          "make sure they have had your name, ID and the call reference, and wait: they end the conversation by saying goodbye, and then you say goodbye and end the call."})}
             self._ending = True
             return {"type": "tool_result", "tool_use_id": call.id, "content": json.dumps({"ok": True, "note": "The line closes after your goodbye has been heard. Say nothing more."})}
         entry = self._tools.get(call.name)

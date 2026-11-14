@@ -433,7 +433,7 @@ async def test_the_representative_ends_the_call_after_the_goodbye_has_been_heard
     assert any(t["name"] == "end_call" for t in bridge._tool_defs_anthropic)
     task = asyncio.create_task(bridge.run(env["call"]))
     await until(lambda: "stt" in env and env["tts"].synthesized)
-    await say(env, "that is all, thank you")
+    await say(env, "that is all, thank you, goodbye")
     await until(lambda: env["tts"].finalized)
     await env["tts"].queue.put(TTSAudioChunk(synthesis_id="stream-1", pcm16_bytes=b"\x00" * 640))
     await env["tts"].queue.put(TTSSynthesisComplete(synthesis_id="stream-1"))
@@ -441,6 +441,29 @@ async def test_the_representative_ends_the_call_after_the_goodbye_has_been_heard
     await task
     assert bridge.terminated_by == "hangup" and env["call"].played
     assert any(len(frame) == 320 for frame in env["call"].played)                       # and then the caller heard the dial tone until the line closed                     # the goodbye was played before the line closed
+
+
+async def test_the_representative_does_not_hang_up_when_the_caller_only_says_thanks(env, monkeypatch):
+    results = []
+
+    async def script(messages, on_text, cancel):
+        last = messages[-1]
+        if isinstance(last.get("content"), list):                               # the tool result of the refused end_call
+            results.append(last["content"][0])
+            await on_text("Of course, I am here.")
+            return text_message("Of course, I am here.")
+        await on_text("You are welcome. Goodbye.")
+        return StreamedAssistantMessage(content=[{"type": "text", "text": "You are welcome. Goodbye."}, {"type": "tool_use", "id": "e1", "name": "end_call", "input": {}}], stop_reason="tool_use")
+    install_model(monkeypatch, env, script)
+    bridge = VoiceBridge(settings(), {}, "persona")
+    task = asyncio.create_task(bridge.run(env["call"]))
+    await until(lambda: "stt" in env and env["tts"].synthesized)
+    await say(env, "that is all, thank you")
+    await until(lambda: results)
+    assert results[0].get("is_error") and "not said goodbye" in results[0]["content"]
+    assert bridge.terminated_by is None and not env["call"].closed.is_set()
+    env["call"].incoming.put_nowait(END)
+    await task
 
 
 async def test_the_call_is_not_ended_while_the_caller_is_still_asking(env, monkeypatch):

@@ -13,7 +13,7 @@ You call a number. After a couple of rings a made-up insurance representative ("
 3. It answers **only what is asked**, in a sentence or two, and does not ask "anything else?" after each answer. Every fact comes from a lookup in the fixture, done *before* it starts speaking, so there are no silent gaps that make a caller think the turn is over.
 4. It **keeps the floor**: while it is audibly speaking it ignores the caller talking over it (`KEEP_THE_FLOOR=0` lets the caller cut it off).
 5. It waits as long as the caller has questions. There is no call-length limit by default.
-6. It ends the call itself: when the caller is done it gives its name/ID and the call reference number if not yet given, says goodbye, and hangs up. After either side hangs up the line plays a three-second dial tone.
+6. It hangs up only after the caller has said goodbye. "Thank you" or "that is all" does not end the call: it stays on the line, gives its name, ID and the call reference if the caller has not had them, and waits. When the caller says goodbye it says goodbye back and hangs up (the end-call tool refuses until the caller's last words contain a goodbye). After either side hangs up the line plays a three-second dial tone.
 
 ## What it knows
 
